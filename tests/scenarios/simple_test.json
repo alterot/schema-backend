@@ -1,0 +1,97 @@
+{
+  "name": "simple_test",
+  "description": "Enkelt testscenario - 7 dagar med minimal bemanning for att verifiera att evaluation fungerar.",
+  "period": {
+    "start": "2025-04-01",
+    "end": "2025-04-07"
+  },
+  "personal": [
+    {
+      "namn": "Anna Testsson",
+      "roll": "sjukskoterska",
+      "anstallning": 100,
+      "tillganglighet": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+      "franvaro": []
+    },
+    {
+      "namn": "Bengt Testsson",
+      "roll": "sjukskoterska",
+      "anstallning": 100,
+      "tillganglighet": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+      "franvaro": []
+    },
+    {
+      "namn": "Cecilia Testsson",
+      "roll": "sjukskoterska",
+      "anstallning": 100,
+      "tillganglighet": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+      "franvaro": []
+    },
+    {
+      "namn": "Gustav Testsson",
+      "roll": "sjukskoterska",
+      "anstallning": 100,
+      "tillganglighet": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+      "franvaro": []
+    },
+    {
+      "namn": "Helena Testsson",
+      "roll": "sjukskoterska",
+      "anstallning": 100,
+      "tillganglighet": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+      "franvaro": []
+    },
+    {
+      "namn": "David Testsson",
+      "roll": "underskoterska",
+      "anstallning": 100,
+      "tillganglighet": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+      "franvaro": []
+    },
+    {
+      "namn": "Eva Testsson",
+      "roll": "underskoterska",
+      "anstallning": 100,
+      "tillganglighet": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+      "franvaro": []
+    },
+    {
+      "namn": "Fredrik Testsson",
+      "roll": "underskoterska",
+      "anstallning": 100,
+      "tillganglighet": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+      "franvaro": []
+    },
+    {
+      "namn": "Ingrid Testsson",
+      "roll": "underskoterska",
+      "anstallning": 100,
+      "tillganglighet": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+      "franvaro": []
+    },
+    {
+      "namn": "Johan Testsson",
+      "roll": "underskoterska",
+      "anstallning": 100,
+      "tillganglighet": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+      "franvaro": []
+    }
+  ],
+  "bemanningsbehov": {
+    "vardag": {
+      "dag": {"lakare": 0, "sjukskoterska": 1, "underskoterska": 1},
+      "kvall": {"lakare": 0, "sjukskoterska": 1, "underskoterska": 1},
+      "natt": {"lakare": 0, "sjukskoterska": 1, "underskoterska": 1}
+    },
+    "helg": {
+      "dag": {"lakare": 0, "sjukskoterska": 1, "underskoterska": 1},
+      "kvall": {"lakare": 0, "sjukskoterska": 1, "underskoterska": 1},
+      "natt": {"lakare": 0, "sjukskoterska": 1, "underskoterska": 1}
+    }
+  },
+  "expected_outcome": {
+    "min_coverage": 95,
+    "max_overtime": 10,
+    "min_quality": 85
+  }
+}

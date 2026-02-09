@@ -1,0 +1,140 @@
+{
+  "personal": [
+    {
+      "namn": "Anna Berg",
+      "roll": "sjukskoterska",
+      "anstallning": 100,
+      "tillganglighet": ["Mon", "Tue", "Wed", "Thu", "Fri"],
+      "franvaro": []
+    },
+    {
+      "namn": "Bengt Svensson",
+      "roll": "sjukskoterska",
+      "anstallning": 100,
+      "tillganglighet": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+      "franvaro": [
+        {
+          "start": "2025-04-15",
+          "slut": "2025-04-20",
+          "typ": "semester"
+        }
+      ]
+    },
+    {
+      "namn": "Cecilia Andersson",
+      "roll": "underskoterska",
+      "anstallning": 75,
+      "tillganglighet": ["Mon", "Tue", "Wed", "Thu", "Fri"],
+      "franvaro": []
+    },
+    {
+      "namn": "David Eriksson",
+      "roll": "underskoterska",
+      "anstallning": 100,
+      "tillganglighet": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+      "franvaro": []
+    },
+    {
+      "namn": "Eva Johansson",
+      "roll": "underskoterska",
+      "anstallning": 100,
+      "tillganglighet": ["Wed", "Thu", "Fri", "Sat", "Sun"],
+      "franvaro": []
+    }
+  ],
+  "behov": [
+    {
+      "datum": "2025-04-01",
+      "pass": "dag",
+      "avdelning": "3B",
+      "kompetenskrav": {
+        "sjukskoterska": 1,
+        "underskoterska": 2
+      }
+    },
+    {
+      "datum": "2025-04-01",
+      "pass": "kväll",
+      "avdelning": "3B",
+      "kompetenskrav": {
+        "sjukskoterska": 1,
+        "underskoterska": 1
+      }
+    },
+    {
+      "datum": "2025-04-02",
+      "pass": "dag",
+      "avdelning": "3B",
+      "kompetenskrav": {
+        "sjukskoterska": 1,
+        "underskoterska": 2
+      }
+    },
+    {
+      "datum": "2025-04-02",
+      "pass": "kväll",
+      "avdelning": "3B",
+      "kompetenskrav": {
+        "sjukskoterska": 1,
+        "underskoterska": 1
+      }
+    },
+    {
+      "datum": "2025-04-03",
+      "pass": "dag",
+      "avdelning": "3B",
+      "kompetenskrav": {
+        "sjukskoterska": 1,
+        "underskoterska": 2
+      }
+    },
+    {
+      "datum": "2025-04-03",
+      "pass": "kväll",
+      "avdelning": "3B",
+      "kompetenskrav": {
+        "sjukskoterska": 1,
+        "underskoterska": 1
+      }
+    },
+    {
+      "datum": "2025-04-04",
+      "pass": "dag",
+      "avdelning": "3B",
+      "kompetenskrav": {
+        "sjukskoterska": 1,
+        "underskoterska": 2
+      }
+    },
+    {
+      "datum": "2025-04-04",
+      "pass": "kväll",
+      "avdelning": "3B",
+      "kompetenskrav": {
+        "sjukskoterska": 1,
+        "underskoterska": 1
+      }
+    },
+    {
+      "datum": "2025-04-05",
+      "pass": "dag",
+      "avdelning": "3B",
+      "kompetenskrav": {
+        "sjukskoterska": 1,
+        "underskoterska": 2
+      }
+    },
+    {
+      "datum": "2025-04-06",
+      "pass": "dag",
+      "avdelning": "3B",
+      "kompetenskrav": {
+        "sjukskoterska": 1,
+        "underskoterska": 2
+      }
+    }
+  ],
+  "config": {
+    "period": "2025-04"
+  }
+}

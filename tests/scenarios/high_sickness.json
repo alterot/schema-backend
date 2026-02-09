@@ -1,0 +1,101 @@
+{
+  "name": "high_sickness",
+  "description": "Hog sjukfranvaro - 2 personer sjuka samtidigt. Testar schemalagning under press.",
+  "period": {
+    "start": "2025-04-01",
+    "end": "2025-04-14"
+  },
+  "personal": [
+    {
+      "namn": "Anna Ssk",
+      "roll": "sjukskoterska",
+      "anstallning": 100,
+      "tillganglighet": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+      "franvaro": [
+        {"start": "2025-04-07", "slut": "2025-04-11", "typ": "sjuk"}
+      ]
+    },
+    {
+      "namn": "Bengt Ssk",
+      "roll": "sjukskoterska",
+      "anstallning": 100,
+      "tillganglighet": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+      "franvaro": []
+    },
+    {
+      "namn": "Cecilia Ssk",
+      "roll": "sjukskoterska",
+      "anstallning": 100,
+      "tillganglighet": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+      "franvaro": []
+    },
+    {
+      "namn": "Diana Ssk",
+      "roll": "sjukskoterska",
+      "anstallning": 100,
+      "tillganglighet": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+      "franvaro": []
+    },
+    {
+      "namn": "Erik Ssk",
+      "roll": "sjukskoterska",
+      "anstallning": 100,
+      "tillganglighet": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+      "franvaro": []
+    },
+    {
+      "namn": "David Usk",
+      "roll": "underskoterska",
+      "anstallning": 100,
+      "tillganglighet": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+      "franvaro": [
+        {"start": "2025-04-08", "slut": "2025-04-12", "typ": "sjuk"}
+      ]
+    },
+    {
+      "namn": "Eva Usk",
+      "roll": "underskoterska",
+      "anstallning": 100,
+      "tillganglighet": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+      "franvaro": []
+    },
+    {
+      "namn": "Fredrik Usk",
+      "roll": "underskoterska",
+      "anstallning": 100,
+      "tillganglighet": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+      "franvaro": []
+    },
+    {
+      "namn": "Gustav Usk",
+      "roll": "underskoterska",
+      "anstallning": 100,
+      "tillganglighet": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+      "franvaro": []
+    },
+    {
+      "namn": "Helena Usk",
+      "roll": "underskoterska",
+      "anstallning": 100,
+      "tillganglighet": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+      "franvaro": []
+    }
+  ],
+  "bemanningsbehov": {
+    "vardag": {
+      "dag": {"lakare": 0, "sjukskoterska": 1, "underskoterska": 1},
+      "kvall": {"lakare": 0, "sjukskoterska": 1, "underskoterska": 1},
+      "natt": {"lakare": 0, "sjukskoterska": 1, "underskoterska": 1}
+    },
+    "helg": {
+      "dag": {"lakare": 0, "sjukskoterska": 1, "underskoterska": 1},
+      "kvall": {"lakare": 0, "sjukskoterska": 1, "underskoterska": 1},
+      "natt": {"lakare": 0, "sjukskoterska": 1, "underskoterska": 1}
+    }
+  },
+  "expected_outcome": {
+    "min_coverage": 90,
+    "max_overtime": 15,
+    "min_quality": 75
+  }
+}
