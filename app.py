@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 from typing import Dict, Any
 import traceback
@@ -512,6 +512,209 @@ def get_schedule(period: str):
         return jsonify({
             'error': 'Internt serverfel',
             'detaljer': f'Kunde inte generera schema: {str(e)}'
+        }), 500
+
+
+@app.route('/api/schedule/<period>/export', methods=['GET'])
+def export_schedule_excel(period: str):
+    """
+    Exportera schema som Excel-fil (.xlsx).
+    Använder sparat schema om det finns, annars genererar nytt.
+    Returnerar fil med två flikar: Kalender och Per person.
+    """
+    from io import BytesIO
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+
+    try:
+        # Load saved schedule or generate new
+        saved = _load_saved_schedule(period)
+        if not saved:
+            personal, shifts, schedule, metrics = _generate_schedule_for_period(period)
+            saved = schedule.to_dict()
+            saved['metrics'] = metrics
+
+        schema_rows = saved.get('schema', [])
+        konflikter = saved.get('konflikter', [])
+        metrics = saved.get('metrics', {})
+
+        # Parse period
+        year, month = period.split('-')
+        year, month = int(year), int(month)
+        num_days = monthrange(year, month)[1]
+
+        # Styles
+        header_font = Font(bold=True, size=11)
+        header_fill = PatternFill(start_color='E0E0E0', end_color='E0E0E0', fill_type='solid')
+        green_fill = PatternFill(start_color='E8F5E9', end_color='E8F5E9', fill_type='solid')
+        yellow_fill = PatternFill(start_color='FFFBEB', end_color='FFFBEB', fill_type='solid')
+        red_fill = PatternFill(start_color='FFEBEE', end_color='FFEBEE', fill_type='solid')
+        thin_border = Border(
+            left=Side(style='thin'), right=Side(style='thin'),
+            top=Side(style='thin'), bottom=Side(style='thin')
+        )
+        dag_fill = PatternFill(start_color='E3F2FD', end_color='E3F2FD', fill_type='solid')
+        kvall_fill = PatternFill(start_color='F3E5F5', end_color='F3E5F5', fill_type='solid')
+        natt_fill = PatternFill(start_color='E8EAF6', end_color='E8EAF6', fill_type='solid')
+
+        weekday_names = ['Mon', 'Tis', 'Ons', 'Tor', 'Fre', 'Lor', 'Son']
+
+        # Group schema by day
+        day_map = {}
+        for row in schema_rows:
+            datum = row['datum']
+            if datum not in day_map:
+                day_map[datum] = {'dag': [], 'kvall': [], 'natt': []}
+            pass_key = 'kvall' if row.get('pass') == 'kväll' else row.get('pass', '')
+            if pass_key in day_map[datum]:
+                day_map[datum][pass_key] = row.get('personal', [])
+
+        # Conflict dates for highlighting
+        conflict_dates = set(k.get('datum') for k in konflikter if k.get('datum'))
+
+        wb = Workbook()
+
+        # ── Sheet 1: Kalender ──
+        ws1 = wb.active
+        ws1.title = 'Kalender'
+
+        # Metrics header
+        ws1.append([f'Schema {period}'])
+        ws1['A1'].font = Font(bold=True, size=14)
+        coverage = metrics.get('coverage_percent', '?')
+        overtime = metrics.get('overtime_hours', '?')
+        quality = metrics.get('quality_score', '?')
+        ws1.append([f'Tackning: {coverage}%    Overtid: {overtime}h    Kvalitet: {quality}/100'])
+        ws1.append([])
+
+        # Table header
+        headers = ['Datum', 'Veckodag', 'Dag', 'Kvall', 'Natt']
+        ws1.append(headers)
+        for col_idx, header in enumerate(headers, 1):
+            cell = ws1.cell(row=4, column=col_idx)
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.border = thin_border
+            cell.alignment = Alignment(horizontal='center')
+
+        # Data rows
+        for day_num in range(1, num_days + 1):
+            datum = f'{period}-{day_num:02d}'
+            d = date(year, month, day_num)
+            weekday = weekday_names[d.weekday()]
+            day_data = day_map.get(datum, {'dag': [], 'kvall': [], 'natt': []})
+
+            dag_str = ', '.join(day_data['dag']) or '-'
+            kvall_str = ', '.join(day_data['kvall']) or '-'
+            natt_str = ', '.join(day_data['natt']) or '-'
+
+            row_idx = 4 + day_num
+            ws1.append([datum, weekday, dag_str, kvall_str, natt_str])
+
+            # Color coding
+            if datum in conflict_dates:
+                fill = red_fill
+            elif d.weekday() >= 5:
+                fill = yellow_fill
+            else:
+                fill = green_fill
+
+            for col_idx in range(1, 6):
+                cell = ws1.cell(row=row_idx, column=col_idx)
+                cell.fill = fill
+                cell.border = thin_border
+
+        # Column widths
+        ws1.column_dimensions['A'].width = 14
+        ws1.column_dimensions['B'].width = 10
+        ws1.column_dimensions['C'].width = 40
+        ws1.column_dimensions['D'].width = 40
+        ws1.column_dimensions['E'].width = 40
+
+        # ── Sheet 2: Per person ──
+        ws2 = wb.create_sheet('Per person')
+
+        # Build person-shift map
+        person_shifts = {}
+        for row in schema_rows:
+            datum = row['datum']
+            pass_key = 'kvall' if row.get('pass') == 'kväll' else row.get('pass', '')
+            for name in row.get('personal', []):
+                if name not in person_shifts:
+                    person_shifts[name] = {}
+                person_shifts[name][datum] = pass_key
+
+        persons = sorted(person_shifts.keys())
+
+        # Header row: Name | 1 | 2 | 3 | ... | Total
+        header_row = ['Personal']
+        for day_num in range(1, num_days + 1):
+            header_row.append(str(day_num))
+        header_row.append('Totalt')
+        ws2.append(header_row)
+
+        for col_idx in range(1, len(header_row) + 1):
+            cell = ws2.cell(row=1, column=col_idx)
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.border = thin_border
+            cell.alignment = Alignment(horizontal='center')
+
+        # Person rows
+        shift_labels = {'dag': 'D', 'kvall': 'K', 'natt': 'N'}
+        shift_fills = {'dag': dag_fill, 'kvall': kvall_fill, 'natt': natt_fill}
+
+        for person_idx, name in enumerate(persons):
+            row_idx = person_idx + 2
+            ws2.cell(row=row_idx, column=1, value=name).border = thin_border
+            total = 0
+
+            for day_num in range(1, num_days + 1):
+                datum = f'{period}-{day_num:02d}'
+                shift = person_shifts[name].get(datum)
+                col_idx = day_num + 1
+                cell = ws2.cell(row=row_idx, column=col_idx)
+                cell.border = thin_border
+                cell.alignment = Alignment(horizontal='center')
+
+                if shift:
+                    cell.value = shift_labels.get(shift, '?')
+                    cell.fill = shift_fills.get(shift, PatternFill())
+                    total += 1
+                else:
+                    cell.value = '-'
+
+            # Total column
+            total_cell = ws2.cell(row=row_idx, column=num_days + 2, value=total)
+            total_cell.border = thin_border
+            total_cell.font = Font(bold=True)
+            total_cell.alignment = Alignment(horizontal='center')
+
+        # Column widths
+        ws2.column_dimensions['A'].width = 25
+        for day_num in range(1, num_days + 1):
+            col_letter = ws2.cell(row=1, column=day_num + 1).column_letter
+            ws2.column_dimensions[col_letter].width = 4
+
+        # Save to memory and return
+        output = BytesIO()
+        wb.save(output)
+        output.seek(0)
+
+        filename = f'schema_{period}.xlsx'
+        return send_file(
+            output,
+            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            as_attachment=True,
+            download_name=filename,
+        )
+
+    except Exception as e:
+        app.logger.error(f'Fel vid Excel-export: {str(e)}')
+        app.logger.error(traceback.format_exc())
+        return jsonify({
+            'error': 'Internt serverfel',
+            'detaljer': f'Kunde inte exportera schema: {str(e)}'
         }), 500
 
 
