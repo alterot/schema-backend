@@ -65,11 +65,28 @@ class SchemaOptimizer:
     def _definiera_objektfunktion(self):
         """
         Definierar vad vi vill optimera.
-        I detta fall: maximera täckning av shifts.
+        Mål: Täck bemanningsbehovet utan överbemanning och med jämn fördelning.
         """
-        # Maximera antal tilldelade pass (säkerställ maximal bemanning)
-        total_assignments = sum(self.assignments.values())
-        self.model.Maximize(total_assignments)
+        penalty_terms = []
+
+        for shift in self.shifts:
+            for roll, antal_krav in shift.kompetenskrav.items():
+                personer_med_roll = [
+                    self.assignments[(p.namn, shift)]
+                    for p in self.personal
+                    if p.roll == roll
+                ]
+                if personer_med_roll:
+                    tilldelade = sum(personer_med_roll)
+                    # Penalizera överbemanning: varje extra person utöver krav kostar
+                    over = self.model.NewIntVar(0, len(personer_med_roll),
+                        f'over_{shift.datum}_{shift.pass_typ.value}_{roll}')
+                    self.model.Add(over >= tilldelade - antal_krav)
+                    penalty_terms.append(over)
+
+        # Minimera total överbemanning
+        if penalty_terms:
+            self.model.Minimize(sum(penalty_terms))
 
     def _bygg_schedule(self, status) -> Schedule:
         """Bygger ett Schedule-objekt från solver-resultatet"""

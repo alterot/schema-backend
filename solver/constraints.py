@@ -184,8 +184,8 @@ class ConstraintBuilder:
                     if p.roll == roll
                 ]
                 if personer_med_roll:
-                    # Exakt antal personer med rätt roll
-                    self.model.Add(sum(personer_med_roll) == antal_krav)
+                    # Minst antal personer med rätt roll (tillåter undermanning om nödvändigt)
+                    self.model.Add(sum(personer_med_roll) >= antal_krav)
 
     def constraint_tillganglighet(self):
         """

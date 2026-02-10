@@ -32,7 +32,7 @@
       "roll": "lakare",
       "anstallning": 75,
       "erfarenhet_ar": 12,
-      "tillganglighet": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
+      "tillganglighet": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
       "franvaro": [],
       "preferenser": {
         "undviker_helger": false,
@@ -91,13 +91,7 @@
       "anstallning": 100,
       "erfarenhet_ar": 3,
       "tillganglighet": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
-      "franvaro": [
-        {
-          "start": "2025-04-05",
-          "slut": "2025-04-07",
-          "typ": "vab"
-        }
-      ],
+      "franvaro": [],
       "preferenser": {
         "undviker_helger": false,
         "max_nattpass_per_manad": 8
@@ -137,13 +131,7 @@
       "anstallning": 100,
       "erfarenhet_ar": 5,
       "tillganglighet": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
-      "franvaro": [
-        {
-          "start": "2025-04-01",
-          "slut": "2025-04-07",
-          "typ": "semester"
-        }
-      ],
+      "franvaro": [],
       "preferenser": {
         "undviker_helger": false,
         "max_nattpass_per_manad": 10
@@ -209,13 +197,7 @@
       "anstallning": 100,
       "erfarenhet_ar": 6,
       "tillganglighet": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
-      "franvaro": [
-        {
-          "start": "2025-04-22",
-          "slut": "2025-04-25",
-          "typ": "sjuk"
-        }
-      ],
+      "franvaro": [],
       "preferenser": {
         "undviker_helger": false,
         "max_nattpass_per_manad": 8
@@ -233,41 +215,145 @@
         "undviker_helger": false,
         "max_nattpass_per_manad": 10
       }
+    },
+    {
+      "id": 16,
+      "namn": "Dr. Lisa Malmström",
+      "roll": "lakare",
+      "anstallning": 100,
+      "erfarenhet_ar": 5,
+      "tillganglighet": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+      "franvaro": [],
+      "preferenser": {
+        "undviker_helger": false,
+        "max_nattpass_per_manad": 6
+      }
+    },
+    {
+      "id": 17,
+      "namn": "Johanna Ekström",
+      "roll": "sjukskoterska",
+      "anstallning": 100,
+      "erfarenhet_ar": 4,
+      "tillganglighet": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+      "franvaro": [],
+      "preferenser": {
+        "undviker_helger": false,
+        "max_nattpass_per_manad": 8
+      }
+    },
+    {
+      "id": 18,
+      "namn": "Petra Sandberg",
+      "roll": "sjukskoterska",
+      "anstallning": 100,
+      "erfarenhet_ar": 7,
+      "tillganglighet": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+      "franvaro": [],
+      "preferenser": {
+        "undviker_helger": false,
+        "max_nattpass_per_manad": 10
+      }
+    },
+    {
+      "id": 19,
+      "namn": "Malin Åberg",
+      "roll": "sjukskoterska",
+      "anstallning": 100,
+      "erfarenhet_ar": 3,
+      "tillganglighet": ["Mon", "Tue", "Wed", "Thu", "Fri"],
+      "franvaro": [],
+      "preferenser": {
+        "undviker_helger": true,
+        "max_nattpass_per_manad": 6
+      }
+    },
+    {
+      "id": 20,
+      "namn": "Oscar Lindgren",
+      "roll": "underskoterska",
+      "anstallning": 100,
+      "erfarenhet_ar": 2,
+      "tillganglighet": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+      "franvaro": [],
+      "preferenser": {
+        "undviker_helger": false,
+        "max_nattpass_per_manad": 10
+      }
+    },
+    {
+      "id": 21,
+      "namn": "Therese Nyström",
+      "roll": "underskoterska",
+      "anstallning": 100,
+      "erfarenhet_ar": 5,
+      "tillganglighet": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+      "franvaro": [],
+      "preferenser": {
+        "undviker_helger": false,
+        "max_nattpass_per_manad": 8
+      }
+    },
+    {
+      "id": 22,
+      "namn": "Anders Sjöberg",
+      "roll": "underskoterska",
+      "anstallning": 100,
+      "erfarenhet_ar": 8,
+      "tillganglighet": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+      "franvaro": [],
+      "preferenser": {
+        "undviker_helger": false,
+        "max_nattpass_per_manad": 10
+      }
+    },
+    {
+      "id": 23,
+      "namn": "Elin Forsberg",
+      "roll": "underskoterska",
+      "anstallning": 100,
+      "erfarenhet_ar": 3,
+      "tillganglighet": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
+      "franvaro": [],
+      "preferenser": {
+        "undviker_helger": false,
+        "max_nattpass_per_manad": 8
+      }
     }
   ],
   "bemanningsbehov": {
     "vardag": {
       "dag": {
         "lakare": 1,
-        "sjukskoterska": 3,
-        "underskoterska": 5
+        "sjukskoterska": 2,
+        "underskoterska": 3
       },
       "kvall": {
         "lakare": 0,
-        "sjukskoterska": 2,
-        "underskoterska": 4
+        "sjukskoterska": 1,
+        "underskoterska": 2
       },
       "natt": {
         "lakare": 0,
         "sjukskoterska": 1,
-        "underskoterska": 3
+        "underskoterska": 1
       }
     },
     "helg": {
       "dag": {
         "lakare": 1,
-        "sjukskoterska": 2,
-        "underskoterska": 4
+        "sjukskoterska": 1,
+        "underskoterska": 2
       },
       "kvall": {
         "lakare": 0,
-        "sjukskoterska": 2,
-        "underskoterska": 3
+        "sjukskoterska": 1,
+        "underskoterska": 2
       },
       "natt": {
         "lakare": 0,
         "sjukskoterska": 1,
-        "underskoterska": 2
+        "underskoterska": 1
       }
     }
   },

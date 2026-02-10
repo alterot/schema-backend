@@ -28,9 +28,15 @@ CORS(app, resources={
 })
 
 
-def _generate_schedule_for_period(period: str):
+def _generate_schedule_for_period(period: str, override_personal=None, override_bemanningsbehov=None):
     """
     Shared helper: Generate a schedule for a YYYY-MM period using the solver.
+
+    Args:
+        period: YYYY-MM format
+        override_personal: Optional list of person dicts from frontend (localStorage)
+        override_bemanningsbehov: Optional dict with vardag/helg requirements from frontend
+
     Returns (personal, shifts, schedule, metrics) tuple.
     Raises ValueError on invalid period.
     """
@@ -42,9 +48,23 @@ def _generate_schedule_for_period(period: str):
     start_date = date(year, month, 1)
     end_date = date(year, month, monthrange(year, month)[1])
 
-    personal_data = get_personal()
+    # Use frontend data if provided, otherwise fallback to JSON file
+    if override_personal:
+        personal_data = override_personal
+        app.logger.info(f'Using {len(personal_data)} personal from frontend override')
+    else:
+        personal_data = get_personal()
+
     avdelning_info = get_avdelning()
-    shifts_data = generate_shifts_for_period(start_date, end_date, avdelning_info['namn'])
+
+    # Generate shifts — if bemanningsbehov override provided, build shifts manually
+    if override_bemanningsbehov:
+        app.logger.info('Using bemanningsbehov from frontend override')
+        shifts_data = _generate_shifts_with_custom_behov(
+            start_date, end_date, avdelning_info['namn'], override_bemanningsbehov
+        )
+    else:
+        shifts_data = generate_shifts_for_period(start_date, end_date, avdelning_info['namn'])
 
     personal = [Person.from_dict(p) for p in personal_data]
     shifts = [Shift.from_dict(s) for s in shifts_data]
@@ -62,6 +82,30 @@ def _generate_schedule_for_period(period: str):
     )
 
     return personal, shifts, schedule, metrics
+
+
+def _generate_shifts_with_custom_behov(start_date, end_date, avdelning, bemanningsbehov):
+    """Generate shifts using custom bemanningsbehov instead of JSON file data."""
+    shifts = []
+    current_date = start_date
+
+    while current_date <= end_date:
+        is_weekend = current_date.weekday() >= 5
+        behov_typ = 'helg' if is_weekend else 'vardag'
+        behov = bemanningsbehov.get(behov_typ, bemanningsbehov.get('vardag', {}))
+
+        for pass_typ in ['dag', 'kvall', 'natt']:
+            pass_namn = pass_typ if pass_typ != 'kvall' else 'kväll'
+            shifts.append({
+                'datum': current_date.isoformat(),
+                'pass': pass_namn,
+                'avdelning': avdelning,
+                'kompetenskrav': behov.get(pass_typ, {})
+            })
+
+        current_date = current_date + timedelta(days=1)
+
+    return shifts
 
 
 def _load_saved_schedule(period: str):
@@ -370,11 +414,13 @@ def validate_input_endpoint():
         }), 500
 
 
-@app.route('/api/schedule/<period>', methods=['GET'])
+@app.route('/api/schedule/<period>', methods=['GET', 'POST'])
 def get_schedule(period: str):
     """
     Tool endpoint: Hämta/generera schema för en period.
-    Returnerar sparat schema om det finns, annars genererar nytt via solver.
+
+    GET: Returnerar sparat schema om det finns, annars genererar nytt via solver.
+    POST: Accepts optional personal/bemanningsbehov from frontend (localStorage).
 
     Args:
         period: YYYY-MM format (t.ex. "2025-04")
@@ -392,15 +438,26 @@ def get_schedule(period: str):
                 'detaljer': f"Period '{period}' är ogiltig. Använd format YYYY-MM (t.ex. '2025-04')"
             }), 400
 
-        # Check for previously saved schedule
-        saved = _load_saved_schedule(period)
-        if saved:
-            app.logger.info(f'Returnerar sparat schema för {period}')
-            saved['source'] = 'saved'
-            return jsonify(saved), 200
+        # Extract optional overrides from POST body
+        override_personal = None
+        override_behov = None
+        if request.method == 'POST':
+            data = request.get_json() or {}
+            override_personal = data.get('personal')
+            override_behov = data.get('bemanningsbehov')
+
+        # Check for previously saved schedule (only if no overrides)
+        if not override_personal and not override_behov:
+            saved = _load_saved_schedule(period)
+            if saved:
+                app.logger.info(f'Returnerar sparat schema för {period}')
+                saved['source'] = 'saved'
+                return jsonify(saved), 200
 
         # Generate new schedule via solver
-        personal, shifts, schedule, metrics = _generate_schedule_for_period(period)
+        personal, shifts, schedule, metrics = _generate_schedule_for_period(
+            period, override_personal=override_personal, override_bemanningsbehov=override_behov
+        )
 
         result = schedule.to_dict()
         result['metrics'] = metrics
@@ -432,7 +489,7 @@ def propose_changes():
     Kör solver, identifierar konflikter, genererar datadrivna förslag.
 
     Input:
-        { "problem": "beskrivning av problem", "period": "YYYY-MM" (optional) }
+        { "problem": "...", "period": "YYYY-MM", "personal": [...], "bemanningsbehov": {...} }
     """
     try:
         data = request.get_json()
@@ -445,15 +502,22 @@ def propose_changes():
 
         problem = data['problem']
         period = data.get('period', date.today().strftime('%Y-%m'))
+        override_personal = data.get('personal')
+        override_behov = data.get('bemanningsbehov')
 
         # Generate schedule and analyze
-        personal, shifts, schedule, metrics = _generate_schedule_for_period(period)
+        personal, shifts, schedule, metrics = _generate_schedule_for_period(
+            period, override_personal=override_personal, override_bemanningsbehov=override_behov
+        )
 
         # Load bemanningsbehov for conflict analysis
-        bemanningsbehov = {
-            'vardag': get_bemanningsbehov(is_weekend=False),
-            'helg': get_bemanningsbehov(is_weekend=True),
-        }
+        if override_behov:
+            bemanningsbehov = override_behov
+        else:
+            bemanningsbehov = {
+                'vardag': get_bemanningsbehov(is_weekend=False),
+                'helg': get_bemanningsbehov(is_weekend=True),
+            }
 
         # Find conflicts in the generated schedule
         conflicts = find_conflicts(schedule.rader, shifts, personal, bemanningsbehov)
@@ -497,7 +561,7 @@ def simulate_impact():
     Kör solver två gånger (before/after) och jämför metrics.
 
     Input:
-        { "changes": [...], "period": "YYYY-MM" (optional) }
+        { "changes": [...], "period": "YYYY-MM", "personal": [...], "bemanningsbehov": {...} }
     """
     try:
         data = request.get_json()
@@ -510,9 +574,13 @@ def simulate_impact():
 
         changes = data['changes']
         period = data.get('period', date.today().strftime('%Y-%m'))
+        override_personal = data.get('personal')
+        override_behov = data.get('bemanningsbehov')
 
         # Run solver for baseline metrics (before changes)
-        personal_before, shifts, schedule_before, metrics_before = _generate_schedule_for_period(period)
+        personal_before, shifts, schedule_before, metrics_before = _generate_schedule_for_period(
+            period, override_personal=override_personal, override_bemanningsbehov=override_behov
+        )
 
         # Apply changes to personal data (e.g. add absence, change availability)
         personal_data_modified = [p.__dict__.copy() for p in personal_before]
@@ -522,7 +590,9 @@ def simulate_impact():
 
         # Re-run solver (deterministic — same input gives same output, but this
         # establishes the pattern for when changes are actually applied)
-        _, _, schedule_after, metrics_after = _generate_schedule_for_period(period)
+        _, _, schedule_after, metrics_after = _generate_schedule_for_period(
+            period, override_personal=override_personal, override_bemanningsbehov=override_behov
+        )
 
         # Calculate impact diff
         impact = calculate_impact(metrics_before, metrics_after)
