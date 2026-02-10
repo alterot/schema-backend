@@ -28,7 +28,7 @@ CORS(app, resources={
 })
 
 
-def _generate_schedule_for_period(period: str, override_personal=None, override_bemanningsbehov=None):
+def _generate_schedule_for_period(period: str, override_personal=None, override_bemanningsbehov=None, constraint_overrides=None):
     """
     Shared helper: Generate a schedule for a YYYY-MM period using the solver.
 
@@ -36,6 +36,8 @@ def _generate_schedule_for_period(period: str, override_personal=None, override_
         period: YYYY-MM format
         override_personal: Optional list of person dicts from frontend (localStorage)
         override_bemanningsbehov: Optional dict with vardag/helg requirements from frontend
+        constraint_overrides: Optional dict with { extra_pass_per_person: int, extra_pass_roll: str }
+                              Temporarily increases max_arbetspass_per_manad for matching roles.
 
     Returns (personal, shifts, schedule, metrics) tuple.
     Raises ValueError on invalid period.
@@ -68,6 +70,19 @@ def _generate_schedule_for_period(period: str, override_personal=None, override_
 
     personal = [Person.from_dict(p) for p in personal_data]
     shifts = [Shift.from_dict(s) for s in shifts_data]
+
+    # Apply constraint overrides (overtime permission)
+    if constraint_overrides:
+        extra_pass = constraint_overrides.get('extra_pass_per_person', 0)
+        extra_roll = constraint_overrides.get('extra_pass_roll', 'alla')
+        if extra_pass and extra_pass > 0:
+            for person in personal:
+                if extra_roll == 'alla' or person.roll == extra_roll:
+                    person.max_arbetspass_per_manad += extra_pass
+                    app.logger.info(
+                        f'Override: {person.namn} ({person.roll}) max_pass '
+                        f'{person.max_arbetspass_per_manad - extra_pass} -> {person.max_arbetspass_per_manad}'
+                    )
 
     app.logger.info(f'Generating schedule for {period}: {len(personal)} personal, {len(shifts)} shifts')
 
@@ -441,13 +456,21 @@ def get_schedule(period: str):
         # Extract optional overrides from POST body
         override_personal = None
         override_behov = None
+        constraint_overrides = None
+        regenerate = False
         if request.method == 'POST':
             data = request.get_json() or {}
             override_personal = data.get('personal')
             override_behov = data.get('bemanningsbehov')
+            constraint_overrides = data.get('constraint_overrides')
+            regenerate = data.get('regenerate', False)
 
-        # Check for previously saved schedule (only if no overrides)
-        if not override_personal and not override_behov:
+        # Constraint overrides always require regeneration (can't use cached schedule)
+        if constraint_overrides:
+            regenerate = True
+
+        # Check for previously saved schedule (skip if regenerate requested)
+        if not regenerate:
             saved = _load_saved_schedule(period)
             if saved:
                 app.logger.info(f'Returnerar sparat schema för {period}')
@@ -456,7 +479,10 @@ def get_schedule(period: str):
 
         # Generate new schedule via solver
         personal, shifts, schedule, metrics = _generate_schedule_for_period(
-            period, override_personal=override_personal, override_bemanningsbehov=override_behov
+            period,
+            override_personal=override_personal,
+            override_bemanningsbehov=override_behov,
+            constraint_overrides=constraint_overrides,
         )
 
         result = schedule.to_dict()
@@ -464,6 +490,13 @@ def get_schedule(period: str):
         result['period'] = period
         result['source'] = 'generated'
         result['message'] = f'Schema genererat för {period} med {len(personal)} personal och {len(shifts)} pass'
+
+        # Auto-save so "Visa schema" returns the same data
+        os.makedirs(SAVED_SCHEDULES_DIR, exist_ok=True)
+        filepath = os.path.join(SAVED_SCHEDULES_DIR, f'{period}.json')
+        with open(filepath, 'w', encoding='utf-8') as f:
+            json.dump(result, f, ensure_ascii=False, indent=2)
+        app.logger.info(f'Schema auto-sparat till {filepath}')
 
         return jsonify(result), 200
 
