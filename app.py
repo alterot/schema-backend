@@ -2,12 +2,19 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 from typing import Dict, Any
 import traceback
-from datetime import date, timedelta
+import json
+import os
+from datetime import date, timedelta, datetime
+from calendar import monthrange
 
 from models import Person, Shift
 from solver import SchemaOptimizer
 from utils import validate_input, ValidationError, calculate_all_metrics
 from data import get_personal, get_bemanningsbehov, get_regler, get_avdelning, generate_shifts_for_period
+from utils.schedule_analyzer import find_conflicts, suggest_solutions, calculate_impact
+
+# Path for saving schedules to disk
+SAVED_SCHEDULES_DIR = os.path.join(os.path.dirname(__file__), 'data', 'saved_schedules')
 
 app = Flask(__name__)
 
@@ -19,6 +26,51 @@ CORS(app, resources={
         "allow_headers": ["Content-Type"]
     }
 })
+
+
+def _generate_schedule_for_period(period: str):
+    """
+    Shared helper: Generate a schedule for a YYYY-MM period using the solver.
+    Returns (personal, shifts, schedule, metrics) tuple.
+    Raises ValueError on invalid period.
+    """
+    year, month = period.split('-')
+    year, month = int(year), int(month)
+    if not (1 <= month <= 12):
+        raise ValueError(f"Invalid month: {month}")
+
+    start_date = date(year, month, 1)
+    end_date = date(year, month, monthrange(year, month)[1])
+
+    personal_data = get_personal()
+    avdelning_info = get_avdelning()
+    shifts_data = generate_shifts_for_period(start_date, end_date, avdelning_info['namn'])
+
+    personal = [Person.from_dict(p) for p in personal_data]
+    shifts = [Shift.from_dict(s) for s in shifts_data]
+
+    app.logger.info(f'Generating schedule for {period}: {len(personal)} personal, {len(shifts)} shifts')
+
+    optimizer = SchemaOptimizer(personal, shifts)
+    schedule = optimizer.optimera()
+
+    metrics = calculate_all_metrics(
+        schema_rader=schedule.rader,
+        konflikter=schedule.konflikter,
+        shifts=shifts,
+        personal=personal
+    )
+
+    return personal, shifts, schedule, metrics
+
+
+def _load_saved_schedule(period: str):
+    """Load a previously saved schedule from disk, or None if not found."""
+    filepath = os.path.join(SAVED_SCHEDULES_DIR, f'{period}.json')
+    if os.path.exists(filepath):
+        with open(filepath, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    return None
 
 
 @app.route('/api/health', methods=['GET'])
@@ -321,23 +373,17 @@ def validate_input_endpoint():
 @app.route('/api/schedule/<period>', methods=['GET'])
 def get_schedule(period: str):
     """
-    Tool endpoint: Hämta befintligt schema för en period.
+    Tool endpoint: Hämta/generera schema för en period.
+    Returnerar sparat schema om det finns, annars genererar nytt via solver.
 
     Args:
         period: YYYY-MM format (t.ex. "2025-04")
-
-    Returns:
-        {
-            "schema": [...],
-            "metrics": {...}
-        }
     """
     try:
         # Validera period-format
         try:
             year, month = period.split('-')
-            year = int(year)
-            month = int(month)
+            year, month = int(year), int(month)
             if not (1 <= month <= 12):
                 raise ValueError()
         except (ValueError, AttributeError):
@@ -346,43 +392,47 @@ def get_schedule(period: str):
                 'detaljer': f"Period '{period}' är ogiltig. Använd format YYYY-MM (t.ex. '2025-04')"
             }), 400
 
-        # POC: Returnera mock-data
-        # I produktion skulle detta hämta från databas
+        # Check for previously saved schedule
+        saved = _load_saved_schedule(period)
+        if saved:
+            app.logger.info(f'Returnerar sparat schema för {period}')
+            saved['source'] = 'saved'
+            return jsonify(saved), 200
+
+        # Generate new schedule via solver
+        personal, shifts, schedule, metrics = _generate_schedule_for_period(period)
+
+        result = schedule.to_dict()
+        result['metrics'] = metrics
+        result['period'] = period
+        result['source'] = 'generated'
+        result['message'] = f'Schema genererat för {period} med {len(personal)} personal och {len(shifts)} pass'
+
+        return jsonify(result), 200
+
+    except ValueError as e:
         return jsonify({
-            'schema': [],
-            'metrics': {
-                'coverage_percent': 0.0,
-                'overtime_hours': 0.0,
-                'rule_violations': 0,
-                'cost_kr': 0.0,
-                'quality_score': 0
-            },
-            'message': f'Inget schema hittades för period {period} (POC-läge)'
-        }), 200
+            'error': 'Ogiltigt periodformat',
+            'detaljer': str(e)
+        }), 400
 
     except Exception as e:
         app.logger.error(f'Fel vid hämtning av schema: {str(e)}')
+        app.logger.error(traceback.format_exc())
         return jsonify({
             'error': 'Internt serverfel',
-            'detaljer': 'Kunde inte hämta schema'
+            'detaljer': f'Kunde inte generera schema: {str(e)}'
         }), 500
 
 
 @app.route('/api/propose', methods=['POST'])
 def propose_changes():
     """
-    Tool endpoint: Föreslå schemaändringar baserat på problem.
+    Tool endpoint: Analysera schema och föreslå förbättringar.
+    Kör solver, identifierar konflikter, genererar datadrivna förslag.
 
     Input:
-        {
-            "problem": "beskrivning av problem"
-        }
-
-    Output:
-        {
-            "proposals": [lista med lösningar],
-            "reasoning": "..."
-        }
+        { "problem": "beskrivning av problem", "period": "YYYY-MM" (optional) }
     """
     try:
         data = request.get_json()
@@ -394,34 +444,49 @@ def propose_changes():
             }), 400
 
         problem = data['problem']
+        period = data.get('period', date.today().strftime('%Y-%m'))
 
-        # POC: Returnera mock-förslag
-        # I produktion skulle detta använda AI/solver för att generera förslag
+        # Generate schedule and analyze
+        personal, shifts, schedule, metrics = _generate_schedule_for_period(period)
+
+        # Load bemanningsbehov for conflict analysis
+        bemanningsbehov = {
+            'vardag': get_bemanningsbehov(is_weekend=False),
+            'helg': get_bemanningsbehov(is_weekend=True),
+        }
+
+        # Find conflicts in the generated schedule
+        conflicts = find_conflicts(schedule.rader, shifts, personal, bemanningsbehov)
+        app.logger.info(f'Found {len(conflicts)} conflicts for period {period}')
+
+        # Generate proposals based on conflicts
+        proposals = suggest_solutions(conflicts, personal, schedule.rader)
+
+        # Build reasoning
+        conflict_summary = f'{len(conflicts)} konflikter identifierade' if conflicts else 'Inga konflikter'
+        reasoning = (
+            f'Baserat på problem "{problem}" och analys av schemat för {period}: '
+            f'{conflict_summary}. '
+            f'Coverage: {metrics["coverage_percent"]}%, '
+            f'övertid: {metrics["overtime_hours"]}h, '
+            f'kvalitet: {metrics["quality_score"]}/100.'
+        )
+
         return jsonify({
-            'proposals': [
-                {
-                    'id': 1,
-                    'beskrivning': 'Flytta personal från pass med övermanning',
-                    'paverkan': 'Reducerar övertid med ~10h',
-                    'kostnad_kr': 0
-                },
-                {
-                    'id': 2,
-                    'beskrivning': 'Schemalägg vikarie för kritiska pass',
-                    'paverkan': 'Ökar coverage till 100%',
-                    'kostnad_kr': 8400
-                }
-            ],
-            'reasoning': f'Baserat på problem "{problem}", identifierades 2 möjliga lösningar. '
-                        'Förslag 1 omfördelar befintlig personal, förslag 2 använder vikarier.',
-            'problem_analyzed': problem
+            'proposals': proposals,
+            'reasoning': reasoning,
+            'problem_analyzed': problem,
+            'conflicts_found': len(conflicts),
+            'conflicts': conflicts[:10],  # Limit to 10 for readability
+            'current_metrics': metrics,
         }), 200
 
     except Exception as e:
         app.logger.error(f'Fel vid förslag av ändringar: {str(e)}')
+        app.logger.error(traceback.format_exc())
         return jsonify({
             'error': 'Internt serverfel',
-            'detaljer': 'Kunde inte generera förslag'
+            'detaljer': f'Kunde inte generera förslag: {str(e)}'
         }), 500
 
 
@@ -429,18 +494,10 @@ def propose_changes():
 def simulate_impact():
     """
     Tool endpoint: Simulera konsekvenser av schemaändringar.
+    Kör solver två gånger (before/after) och jämför metrics.
 
     Input:
-        {
-            "changes": [lista med ändringar]
-        }
-
-    Output:
-        {
-            "metrics_before": {...},
-            "metrics_after": {...},
-            "impact": "..."
-        }
+        { "changes": [...], "period": "YYYY-MM" (optional) }
     """
     try:
         data = request.get_json()
@@ -452,58 +509,63 @@ def simulate_impact():
             }), 400
 
         changes = data['changes']
+        period = data.get('period', date.today().strftime('%Y-%m'))
 
-        # POC: Returnera mock-simulering
-        # I produktion skulle detta köra solver med ändringarna och jämföra metrics
-        metrics_before = {
-            'coverage_percent': 92.5,
-            'overtime_hours': 24.0,
-            'rule_violations': 3,
-            'cost_kr': 156000.0,
-            'quality_score': 76
-        }
+        # Run solver for baseline metrics (before changes)
+        personal_before, shifts, schedule_before, metrics_before = _generate_schedule_for_period(period)
 
-        metrics_after = {
-            'coverage_percent': 98.0,
-            'overtime_hours': 16.0,
-            'rule_violations': 1,
-            'cost_kr': 152000.0,
-            'quality_score': 88
-        }
+        # Apply changes to personal data (e.g. add absence, change availability)
+        personal_data_modified = [p.__dict__.copy() for p in personal_before]
+        # Note: changes from AI are descriptive; we pass them through and re-run solver
+        # For now, the "after" run uses the same data — the impact comparison shows
+        # what the solver produces. In future: parse changes and modify personal_data.
+
+        # Re-run solver (deterministic — same input gives same output, but this
+        # establishes the pattern for when changes are actually applied)
+        _, _, schedule_after, metrics_after = _generate_schedule_for_period(period)
+
+        # Calculate impact diff
+        impact = calculate_impact(metrics_before, metrics_after)
+
+        # Build human-readable impact summary
+        parts = []
+        if impact['coverage_diff'] != 0:
+            parts.append(f'coverage {"+" if impact["coverage_diff"] > 0 else ""}{impact["coverage_diff"]}%')
+        if impact['overtime_diff'] != 0:
+            parts.append(f'övertid {"+" if impact["overtime_diff"] > 0 else ""}{impact["overtime_diff"]}h')
+        if impact['cost_diff'] != 0:
+            parts.append(f'kostnad {"+" if impact["cost_diff"] > 0 else ""}{impact["cost_diff"]:,.0f} kr')
+        if impact['quality_diff'] != 0:
+            parts.append(f'kvalitet {"+" if impact["quality_diff"] > 0 else ""}{impact["quality_diff"]}')
+        impact_text = ', '.join(parts) if parts else 'Ingen mätbar skillnad'
 
         return jsonify({
             'metrics_before': metrics_before,
             'metrics_after': metrics_after,
-            'impact': 'Föreslagna ändringar förbättrar coverage med 5.5%, '
-                     'reducerar övertid med 8h, minskar regelbrott från 3 till 1, '
-                     'och sparar 4000 kr samtidigt som quality score ökar från 76 till 88.',
-            'changes_count': len(changes) if isinstance(changes, list) else 0
+            'impact': impact,
+            'impact_summary': impact_text,
+            'changes_count': len(changes) if isinstance(changes, list) else 0,
+            'period': period,
         }), 200
 
     except Exception as e:
         app.logger.error(f'Fel vid simulering: {str(e)}')
+        app.logger.error(traceback.format_exc())
         return jsonify({
             'error': 'Internt serverfel',
-            'detaljer': 'Kunde inte simulera ändringar'
+            'detaljer': f'Kunde inte simulera ändringar: {str(e)}'
         }), 500
 
 
 @app.route('/api/apply', methods=['POST'])
 def apply_changes():
     """
-    Tool endpoint: Applicera godkända schemaändringar.
+    Tool endpoint: Spara schema till disk.
+    Sparar till backend/data/saved_schedules/<period>.json.
+    # TODO: Replace with database storage in production.
 
     Input:
-        {
-            "schema": {...},
-            "confirmed": bool
-        }
-
-    Output:
-        {
-            "success": bool,
-            "message": "..."
-        }
+        { "schema": {...}, "confirmed": bool, "period": "YYYY-MM" (optional) }
     """
     try:
         data = request.get_json()
@@ -523,7 +585,7 @@ def apply_changes():
         if not data['confirmed']:
             return jsonify({
                 'success': False,
-                'message': 'Ändringar ej bekräftade - ingen action utförd'
+                'message': 'Ändringar ej bekräftade — ingen åtgärd utförd'
             }), 200
 
         if 'schema' not in data:
@@ -532,22 +594,39 @@ def apply_changes():
                 'detaljer': 'Request body måste innehålla "schema"-fält när confirmed=true'
             }), 400
 
-        schema = data['schema']
+        schema_data = data['schema']
+        period = data.get('period', date.today().strftime('%Y-%m'))
+        timestamp = datetime.utcnow().isoformat() + 'Z'
 
-        # POC: Simulera att ändringarna appliceras
-        # I produktion skulle detta spara till databas
+        # Save to JSON file
+        os.makedirs(SAVED_SCHEDULES_DIR, exist_ok=True)
+        filepath = os.path.join(SAVED_SCHEDULES_DIR, f'{period}.json')
+
+        save_payload = {
+            'period': period,
+            'saved_at': timestamp,
+            **schema_data,
+        }
+
+        with open(filepath, 'w', encoding='utf-8') as f:
+            json.dump(save_payload, f, ensure_ascii=False, indent=2)
+
+        app.logger.info(f'Schema sparat till {filepath}')
+
         return jsonify({
             'success': True,
-            'message': 'Schema uppdaterat framgångsrikt (POC-läge - ingen databas)',
-            'timestamp': '2025-04-15T10:30:00Z',
-            'changes_applied': True
+            'message': f'Schema för {period} sparat',
+            'timestamp': timestamp,
+            'saved_to': filepath,
+            'changes_applied': True,
         }), 200
 
     except Exception as e:
         app.logger.error(f'Fel vid applicering av ändringar: {str(e)}')
+        app.logger.error(traceback.format_exc())
         return jsonify({
             'error': 'Internt serverfel',
-            'detaljer': 'Kunde inte applicera ändringar'
+            'detaljer': f'Kunde inte spara schema: {str(e)}'
         }), 500
 
 

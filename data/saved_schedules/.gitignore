@@ -1,0 +1,3 @@
+# Ignore saved schedules (generated data, not source)
+*.json
+!.gitignore
