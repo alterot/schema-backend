@@ -36,11 +36,7 @@ class SchemaOptimizer:
         )
         constraint_builder.add_harda_constraints()
 
-        # Steg 3: Lägg till mjuka mål (optimeringsmål)
-        objective_vars = []
-        constraint_builder.add_mjuka_mal(objective_vars)
-
-        # Steg 4: Definiera objektfunktion (vad vi vill maximera/minimera)
+        # Steg 3: Definiera objektfunktion (minimera överbemanning + jämn fördelning)
         self._definiera_objektfunktion()
 
         # Steg 5: Lös problemet
@@ -65,10 +61,14 @@ class SchemaOptimizer:
     def _definiera_objektfunktion(self):
         """
         Definierar vad vi vill optimera.
-        Mål: Täck bemanningsbehovet utan överbemanning och med jämn fördelning.
+        Tre mål med viktning:
+          1. Minimera överbemanning (vikt 10)
+          2. Jämn fördelning av helgpass (vikt 5)
+          3. Jämn fördelning av kväll/nattpass (vikt 3)
         """
         penalty_terms = []
 
+        # --- Mål 1: Minimera överbemanning ---
         for shift in self.shifts:
             for roll, antal_krav in shift.kompetenskrav.items():
                 personer_med_roll = [
@@ -77,14 +77,51 @@ class SchemaOptimizer:
                     if p.roll == roll
                 ]
                 if personer_med_roll:
-                    tilldelade = sum(personer_med_roll)
-                    # Penalizera överbemanning: varje extra person utöver krav kostar
-                    over = self.model.NewIntVar(0, len(personer_med_roll),
+                    over = self.model.NewIntVar(
+                        0, len(personer_med_roll),
                         f'over_{shift.datum}_{shift.pass_typ.value}_{roll}')
-                    self.model.Add(over >= tilldelade - antal_krav)
-                    penalty_terms.append(over)
+                    self.model.Add(over >= sum(personer_med_roll) - antal_krav)
+                    penalty_terms.append(over * 10)
 
-        # Minimera total överbemanning
+        # --- Mål 2: Jämn helgfördelning ---
+        helg_shifts = [s for s in self.shifts if s.datum.weekday() >= 5]
+        if helg_shifts:
+            helgpass_vars = []
+            for person in self.personal:
+                h = self.model.NewIntVar(0, len(helg_shifts), f'helg_{person.namn}')
+                self.model.Add(h == sum(
+                    self.assignments[(person.namn, s)] for s in helg_shifts
+                ))
+                helgpass_vars.append(h)
+
+            helg_max = self.model.NewIntVar(0, len(helg_shifts), 'helg_max')
+            helg_min = self.model.NewIntVar(0, len(helg_shifts), 'helg_min')
+            self.model.AddMaxEquality(helg_max, helgpass_vars)
+            self.model.AddMinEquality(helg_min, helgpass_vars)
+            helg_spread = self.model.NewIntVar(0, len(helg_shifts), 'helg_spread')
+            self.model.Add(helg_spread == helg_max - helg_min)
+            penalty_terms.append(helg_spread * 5)
+
+        # --- Mål 3: Jämn kväll/nattfördelning ---
+        kn_shifts = [s for s in self.shifts if s.pass_typ in [PassTyp.KVALL, PassTyp.NATT]]
+        if kn_shifts:
+            kn_vars = []
+            for person in self.personal:
+                kn = self.model.NewIntVar(0, len(kn_shifts), f'kn_{person.namn}')
+                self.model.Add(kn == sum(
+                    self.assignments[(person.namn, s)] for s in kn_shifts
+                ))
+                kn_vars.append(kn)
+
+            kn_max = self.model.NewIntVar(0, len(kn_shifts), 'kn_max')
+            kn_min = self.model.NewIntVar(0, len(kn_shifts), 'kn_min')
+            self.model.AddMaxEquality(kn_max, kn_vars)
+            self.model.AddMinEquality(kn_min, kn_vars)
+            kn_spread = self.model.NewIntVar(0, len(kn_shifts), 'kn_spread')
+            self.model.Add(kn_spread == kn_max - kn_min)
+            penalty_terms.append(kn_spread * 3)
+
+        # Minimera sammanlagd penalty
         if penalty_terms:
             self.model.Minimize(sum(penalty_terms))
 

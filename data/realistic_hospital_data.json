@@ -13,7 +13,7 @@
       "roll": "lakare",
       "anstallning": 100,
       "erfarenhet_ar": 8,
-      "tillganglighet": ["Mon", "Tue", "Wed", "Thu", "Fri"],
+      "tillganglighet": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
       "franvaro": [
         {
           "start": "2025-04-14",
