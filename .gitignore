@@ -27,3 +27,38 @@ dist-ssr
 .claude/
 CLAUDE_CONTEXT.md
 .clinerules.md
+
+# Python
+*.pyo
+*.pyd
+.Python
+*.pyc
+__pycache__/
+venv/
+env/
+ENV/
+
+# Environment
+.env
+.env.local
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# OS
+Thumbs.db
+
+# Logs  
+*.log
+
+# Test coverage
+.coverage
+htmlcov/
+.pytest_cache/
+
+# Distribution
+build/
+*.egg-info/
+dist/
