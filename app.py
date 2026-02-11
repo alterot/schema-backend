@@ -10,7 +10,7 @@ from calendar import monthrange
 from models import Person, Shift
 from solver import SchemaOptimizer
 from utils import validate_input, ValidationError, calculate_all_metrics
-from data import get_personal, get_bemanningsbehov, get_regler, get_avdelning, generate_shifts_for_period
+from data import get_personal, get_bemanningsbehov, get_regler, get_avdelning, generate_shifts_for_period, is_helgdag
 from utils.schedule_analyzer import find_conflicts, suggest_solutions, calculate_impact
 
 # Path for saving schedules to disk
@@ -151,13 +151,11 @@ def _generate_schedule_for_period(period: str, override_personal=None, override_
 
 def _generate_shifts_with_custom_behov(start_date, end_date, avdelning, bemanningsbehov):
     """Generate shifts using custom bemanningsbehov instead of JSON file data."""
-    import holidays
-    se_holidays = holidays.SE(years=[start_date.year, end_date.year])
     shifts = []
     current_date = start_date
 
     while current_date <= end_date:
-        is_weekend = current_date.weekday() >= 5 or current_date in se_holidays
+        is_weekend = current_date.weekday() >= 5 or is_helgdag(current_date)
         behov_typ = 'helg' if is_weekend else 'vardag'
         behov = bemanningsbehov.get(behov_typ, bemanningsbehov.get('vardag', {}))
 

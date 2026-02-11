@@ -10,6 +10,30 @@ from datetime import date
 from functools import lru_cache
 import holidays
 
+
+def is_helgdag(d: date) -> bool:
+    """
+    Check if a date is a Swedish holiday OR a de facto helgdag.
+    holidays.SE only includes official public holidays but misses days
+    that are always treated as helg in healthcare scheduling:
+    - Julafton (24 dec)
+    - Nyårsafton (31 dec)
+    - Midsommarafton (Friday before midsommardagen)
+    """
+    se = holidays.SE(years=d.year)
+    if d in se:
+        return True
+    # Julafton
+    if d.month == 12 and d.day == 24:
+        return True
+    # Nyårsafton
+    if d.month == 12 and d.day == 31:
+        return True
+    # Midsommarafton: fredag före midsommardagen (lördag vecka 25, 20-26 juni)
+    if d.month == 6 and d.weekday() == 4 and 19 <= d.day <= 25:
+        return True
+    return False
+
 # Path to the data file
 DATA_FILE = os.path.join(os.path.dirname(__file__), 'realistic_hospital_data.json')
 
@@ -129,10 +153,8 @@ def generate_shifts_for_period(
     shifts = []
     current_date = start_date
 
-    se_holidays = holidays.SE(years=[start_date.year, end_date.year])
-
     while current_date <= end_date:
-        is_weekend = current_date.weekday() >= 5 or current_date in se_holidays
+        is_weekend = current_date.weekday() >= 5 or is_helgdag(current_date)
         behov = get_bemanningsbehov(is_weekend)
 
         for pass_typ in ['dag', 'kvall', 'natt']:

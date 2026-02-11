@@ -11,7 +11,8 @@ from .loader import (
     get_avdelning,
     generate_shifts_for_period,
     get_scenario,
-    clear_cache
+    clear_cache,
+    is_helgdag
 )
 
 __all__ = [
@@ -22,5 +23,6 @@ __all__ = [
     'get_avdelning',
     'generate_shifts_for_period',
     'get_scenario',
-    'clear_cache'
+    'clear_cache',
+    'is_helgdag'
 ]
