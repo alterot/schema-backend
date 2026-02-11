@@ -320,8 +320,8 @@ class SchemaOptimizer:
                             datum=rad.datum,
                             pass_typ=rad.pass_typ,
                             typ='overbemanning',
-                            beskrivning=f'{faktisk - krav} för många {roll}',
-                            allvarlighetsgrad=1
+                            beskrivning=f'{faktisk - krav} extra {roll} — överväg flex/ledig',
+                            allvarlighetsgrad=0
                         ))
 
         # Kontrollera fördelning per kategori
