@@ -543,6 +543,17 @@ def get_schedule(period: str):
         result['source'] = 'generated'
         result['message'] = f'Schema genererat för {period} med {len(personal)} personal och {len(shifts)} pass'
 
+        # Include franvaro periods so frontend can render per-day absence
+        franvaro_perioder = {}
+        for p in personal:
+            if p.franvaro:
+                franvaro_perioder[p.namn] = [
+                    {'start': f.start.isoformat(), 'slut': f.slut.isoformat(), 'typ': f.typ}
+                    for f in p.franvaro
+                ]
+        if franvaro_perioder:
+            result['franvaro_perioder'] = franvaro_perioder
+
         # Auto-save so "Visa schema" returns the same data
         os.makedirs(SAVED_SCHEDULES_DIR, exist_ok=True)
         filepath = os.path.join(SAVED_SCHEDULES_DIR, f'{period}.json')
