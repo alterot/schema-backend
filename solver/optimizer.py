@@ -62,14 +62,20 @@ class SchemaOptimizer:
     def _definiera_objektfunktion(self):
         """
         Definierar vad vi vill optimera.
-        Tre mål med viktning:
-          1. Minimera överbemanning (vikt 10)
-          2. Jämn fördelning av helgpass (vikt 5)
-          3. Jämn fördelning av kväll/nattpass (vikt 3)
+        Sju mål med viktning balanserade för rättvisa:
+          1. Minimera överbemanning (vikt 3 per term — många termer)
+          2. Jämn fördelning av totalt antal pass (vikt 10)
+          3. Jämn fördelning av helgpass (vikt 8)
+          4. Jämn fördelning av kvällspass (vikt 6)
+          5. Jämn fördelning av nattpass (vikt 6)
+          6. Undvik >3 kväll- eller nattpass i rad (vikt 4 per förekomst)
+          7. Undvik bakåtrotation natt→ledig→dag (vikt 3 per förekomst)
         """
         penalty_terms = []
 
         # --- Mål 1: Minimera överbemanning ---
+        # Vikt 3 (sänkt från 10) — det finns ~90 shifts × roller = många termer
+        # som annars dominerar och tränger ut rättvisemålen
         for shift in self.shifts:
             for roll, antal_krav in shift.kompetenskrav.items():
                 personer_med_roll = [
@@ -82,9 +88,28 @@ class SchemaOptimizer:
                         0, len(personer_med_roll),
                         f'over_{shift.datum}_{shift.pass_typ.value}_{roll}')
                     self.model.Add(over >= sum(personer_med_roll) - antal_krav)
-                    penalty_terms.append(over * 10)
+                    penalty_terms.append(over * 3)
 
-        # --- Mål 2: Jämn helgfördelning ---
+        # --- Mål 2: Jämn total-fördelning ---
+        # Viktigaste rättvisemålet: ingen ska ha markant fler/färre pass totalt
+        total_vars = []
+        for person in self.personal:
+            t = self.model.NewIntVar(0, len(self.shifts), f'total_{person.namn}')
+            self.model.Add(t == sum(
+                self.assignments[(person.namn, s)] for s in self.shifts
+            ))
+            total_vars.append(t)
+
+        if total_vars:
+            total_max = self.model.NewIntVar(0, len(self.shifts), 'total_max')
+            total_min = self.model.NewIntVar(0, len(self.shifts), 'total_min')
+            self.model.AddMaxEquality(total_max, total_vars)
+            self.model.AddMinEquality(total_min, total_vars)
+            total_spread = self.model.NewIntVar(0, len(self.shifts), 'total_spread')
+            self.model.Add(total_spread == total_max - total_min)
+            penalty_terms.append(total_spread * 10)
+
+        # --- Mål 3: Jämn helgfördelning ---
         helg_shifts = [s for s in self.shifts if s.datum.weekday() >= 5]
         if helg_shifts:
             helgpass_vars = []
@@ -101,26 +126,105 @@ class SchemaOptimizer:
             self.model.AddMinEquality(helg_min, helgpass_vars)
             helg_spread = self.model.NewIntVar(0, len(helg_shifts), 'helg_spread')
             self.model.Add(helg_spread == helg_max - helg_min)
-            penalty_terms.append(helg_spread * 5)
+            penalty_terms.append(helg_spread * 8)
 
-        # --- Mål 3: Jämn kväll/nattfördelning ---
-        kn_shifts = [s for s in self.shifts if s.pass_typ in [PassTyp.KVALL, PassTyp.NATT]]
-        if kn_shifts:
-            kn_vars = []
+        # --- Mål 4: Jämn kvällsfördelning (separat från natt) ---
+        kvall_shifts = [s for s in self.shifts if s.pass_typ == PassTyp.KVALL]
+        if kvall_shifts:
+            kvall_vars = []
             for person in self.personal:
-                kn = self.model.NewIntVar(0, len(kn_shifts), f'kn_{person.namn}')
-                self.model.Add(kn == sum(
-                    self.assignments[(person.namn, s)] for s in kn_shifts
+                kv = self.model.NewIntVar(0, len(kvall_shifts), f'kvall_{person.namn}')
+                self.model.Add(kv == sum(
+                    self.assignments[(person.namn, s)] for s in kvall_shifts
                 ))
-                kn_vars.append(kn)
+                kvall_vars.append(kv)
 
-            kn_max = self.model.NewIntVar(0, len(kn_shifts), 'kn_max')
-            kn_min = self.model.NewIntVar(0, len(kn_shifts), 'kn_min')
-            self.model.AddMaxEquality(kn_max, kn_vars)
-            self.model.AddMinEquality(kn_min, kn_vars)
-            kn_spread = self.model.NewIntVar(0, len(kn_shifts), 'kn_spread')
-            self.model.Add(kn_spread == kn_max - kn_min)
-            penalty_terms.append(kn_spread * 3)
+            kvall_max = self.model.NewIntVar(0, len(kvall_shifts), 'kvall_max')
+            kvall_min = self.model.NewIntVar(0, len(kvall_shifts), 'kvall_min')
+            self.model.AddMaxEquality(kvall_max, kvall_vars)
+            self.model.AddMinEquality(kvall_min, kvall_vars)
+            kvall_spread = self.model.NewIntVar(0, len(kvall_shifts), 'kvall_spread')
+            self.model.Add(kvall_spread == kvall_max - kvall_min)
+            penalty_terms.append(kvall_spread * 6)
+
+        # --- Mål 5: Jämn nattfördelning (separat från kväll) ---
+        natt_shifts = [s for s in self.shifts if s.pass_typ == PassTyp.NATT]
+        if natt_shifts:
+            natt_vars = []
+            for person in self.personal:
+                n = self.model.NewIntVar(0, len(natt_shifts), f'natt_{person.namn}')
+                self.model.Add(n == sum(
+                    self.assignments[(person.namn, s)] for s in natt_shifts
+                ))
+                natt_vars.append(n)
+
+            natt_max = self.model.NewIntVar(0, len(natt_shifts), 'natt_max')
+            natt_min = self.model.NewIntVar(0, len(natt_shifts), 'natt_min')
+            self.model.AddMaxEquality(natt_max, natt_vars)
+            self.model.AddMinEquality(natt_min, natt_vars)
+            natt_spread = self.model.NewIntVar(0, len(natt_shifts), 'natt_spread')
+            self.model.Add(natt_spread == natt_max - natt_min)
+            penalty_terms.append(natt_spread * 6)
+
+        # --- Mål 6: Undvik >3 kväll- eller nattpass i rad ---
+        # Lång serie av samma obekväma passtyp är dåligt för hälsan
+        alla_datum = sorted(set(s.datum for s in self.shifts))
+        for person in self.personal:
+            for i in range(len(alla_datum) - 3):
+                datum_4 = alla_datum[i:i + 4]
+                # Kontrollera att de 4 dagarna är konsekutiva
+                if all((datum_4[j + 1] - datum_4[j]).days == 1 for j in range(3)):
+                    # Kvällsstreak: alla 4 dagar kväll?
+                    kvall_4 = [
+                        self.assignments[(person.namn, s)]
+                        for s in self.shifts
+                        if s.datum in datum_4 and s.pass_typ == PassTyp.KVALL
+                    ]
+                    if len(kvall_4) == 4:
+                        streak_kv = self.model.NewBoolVar(
+                            f'kv_streak_{person.namn}_{datum_4[0]}')
+                        self.model.Add(sum(kvall_4) >= 4).OnlyEnforceIf(streak_kv)
+                        self.model.Add(sum(kvall_4) < 4).OnlyEnforceIf(streak_kv.Not())
+                        penalty_terms.append(streak_kv * 4)
+
+                    # Nattstreak: alla 4 dagar natt?
+                    natt_4 = [
+                        self.assignments[(person.namn, s)]
+                        for s in self.shifts
+                        if s.datum in datum_4 and s.pass_typ == PassTyp.NATT
+                    ]
+                    if len(natt_4) == 4:
+                        streak_n = self.model.NewBoolVar(
+                            f'n_streak_{person.namn}_{datum_4[0]}')
+                        self.model.Add(sum(natt_4) >= 4).OnlyEnforceIf(streak_n)
+                        self.model.Add(sum(natt_4) < 4).OnlyEnforceIf(streak_n.Not())
+                        penalty_terms.append(streak_n * 4)
+
+        # --- Mål 7: Undvik bakåtrotation (natt → ledig → dag) ---
+        # Natt dag 1, ledig dag 2, dagpass dag 3 = dålig cirkadisk övergång
+        for person in self.personal:
+            for i in range(len(alla_datum) - 2):
+                dag1 = alla_datum[i]
+                dag3 = alla_datum[i + 2]
+                if (dag3 - dag1).days == 2:
+                    natt_s = next(
+                        (s for s in self.shifts
+                         if s.datum == dag1 and s.pass_typ == PassTyp.NATT), None)
+                    dag_s = next(
+                        (s for s in self.shifts
+                         if s.datum == dag3 and s.pass_typ == PassTyp.DAG), None)
+                    if natt_s and dag_s:
+                        bad_rot = self.model.NewBoolVar(
+                            f'bad_rot_{person.namn}_{dag1}')
+                        self.model.Add(
+                            self.assignments[(person.namn, natt_s)] +
+                            self.assignments[(person.namn, dag_s)] >= 2
+                        ).OnlyEnforceIf(bad_rot)
+                        self.model.Add(
+                            self.assignments[(person.namn, natt_s)] +
+                            self.assignments[(person.namn, dag_s)] < 2
+                        ).OnlyEnforceIf(bad_rot.Not())
+                        penalty_terms.append(bad_rot * 3)
 
         # Minimera sammanlagd penalty
         if penalty_terms:
@@ -220,59 +324,115 @@ class SchemaOptimizer:
                             allvarlighetsgrad=1
                         ))
 
-        # Kontrollera helgfördelning
-        self._kontrollera_helgfordelning(schedule)
+        # Kontrollera fördelning per kategori
+        self._kontrollera_fordelning(schedule)
 
-        # Kontrollera kväll/nattfördelning
-        self._kontrollera_kvall_natt_fordelning(schedule)
+    def _forklara_obalans(self, person_namn, kategori):
+        """Försöker förklara varför en person har fler/färre pass av en viss typ."""
+        person = next((p for p in self.personal if p.namn == person_namn), None)
+        if not person:
+            return ''
 
-    def _kontrollera_helgfordelning(self, schedule: Schedule):
-        """Kontrollerar om helgpass är jämnt fördelade"""
-        helgpass_per_person = defaultdict(int)
+        orsaker = []
+
+        dag_namn = {'Mon': 'mån', 'Tue': 'tis', 'Wed': 'ons', 'Thu': 'tor',
+                    'Fri': 'fre', 'Sat': 'lör', 'Sun': 'sön'}
+
+        # Begränsad tillgänglighet?
+        alla_dagar = {'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'}
+        saknade = alla_dagar - set(person.tillganglighet)
+        if saknade:
+            saknade_sv = sorted([dag_namn.get(d, d) for d in saknade])
+            if kategori == 'helg' and ('lör' in saknade_sv or 'sön' in saknade_sv):
+                orsaker.append(f'ej tillgänglig {", ".join(saknade_sv)}')
+            elif kategori != 'helg' and saknade:
+                orsaker.append(f'ej tillgänglig {", ".join(saknade_sv)}')
+
+        # Frånvaro?
+        if person.franvaro:
+            antal = len(person.franvaro)
+            orsaker.append(f'{antal} frånvaroperiod{"er" if antal > 1 else ""}')
+
+        # Passrestriktioner?
+        if person.exclude_pass_typer:
+            typer = ', '.join(person.exclude_pass_typer)
+            orsaker.append(f'får ej jobba {typer}')
+
+        # Deltid?
+        if person.anstallning < 100:
+            orsaker.append(f'{person.anstallning}% tjänst')
+
+        if orsaker:
+            return f' — {"; ".join(orsaker)}'
+        return ' — begränsat av övriga schemavillkor'
+
+    def _kontrollera_fordelning(self, schedule: Schedule):
+        """Kontrollerar om pass är jämnt fördelade, separat per kategori."""
+        # Samla data per person
+        helg_per_person = defaultdict(int)
+        kvall_per_person = defaultdict(int)
+        natt_per_person = defaultdict(int)
 
         for rad in schedule.rader:
-            if rad.datum.weekday() >= 5:  # Lördag eller söndag
-                for person_namn in rad.personal:
-                    helgpass_per_person[person_namn] += 1
+            for person_namn in rad.personal:
+                if rad.datum.weekday() >= 5:
+                    helg_per_person[person_namn] += 1
+                if rad.pass_typ == PassTyp.KVALL:
+                    kvall_per_person[person_namn] += 1
+                elif rad.pass_typ == PassTyp.NATT:
+                    natt_per_person[person_namn] += 1
 
-        if helgpass_per_person:
-            genomsnitt = sum(helgpass_per_person.values()) / len(self.personal)
-            max_helg = max(helgpass_per_person.values())
-            min_helg = min(helgpass_per_person.values(), default=0)
-
-            if max_helg - min_helg > 2:
-                # Ojämn fördelning
-                max_person = max(helgpass_per_person, key=helgpass_per_person.get)
+        # Helgfördelning
+        if helg_per_person:
+            max_v = max(helg_per_person.values())
+            min_v = min(helg_per_person.values(), default=0)
+            if max_v - min_v > 2:
+                max_p = max(helg_per_person, key=helg_per_person.get)
+                min_p = min(helg_per_person, key=helg_per_person.get)
+                forklaring_max = self._forklara_obalans(max_p, 'helg')
+                forklaring_min = self._forklara_obalans(min_p, 'helg')
                 schedule.lagg_till_konflikt(Konflikt(
                     datum=None,
                     pass_typ=None,
                     typ='obalanserad_helgfordelning',
-                    beskrivning=f'Ojämn helgfördelning: {max_person} har {max_helg} helgpass '
-                               f'medan andra har {min_helg}',
+                    beskrivning=f'Ojämn helgfördelning: {max_p} har {max_v} helgpass{forklaring_max}, '
+                               f'{min_p} har {min_v}{forklaring_min}',
                     allvarlighetsgrad=1
                 ))
 
-    def _kontrollera_kvall_natt_fordelning(self, schedule: Schedule):
-        """Kontrollerar om kväll/nattpass är jämnt fördelade"""
-        kvall_natt_per_person = defaultdict(int)
-
-        for rad in schedule.rader:
-            if rad.pass_typ in [PassTyp.KVALL, PassTyp.NATT]:
-                for person_namn in rad.personal:
-                    kvall_natt_per_person[person_namn] += 1
-
-        if kvall_natt_per_person:
-            max_kn = max(kvall_natt_per_person.values())
-            min_kn = min(kvall_natt_per_person.values(), default=0)
-
-            if max_kn - min_kn > 3:
-                max_person = max(kvall_natt_per_person, key=kvall_natt_per_person.get)
+        # Kvällsfördelning (separat)
+        if kvall_per_person:
+            max_v = max(kvall_per_person.values())
+            min_v = min(kvall_per_person.values(), default=0)
+            if max_v - min_v > 2:
+                max_p = max(kvall_per_person, key=kvall_per_person.get)
+                min_p = min(kvall_per_person, key=kvall_per_person.get)
+                forklaring_max = self._forklara_obalans(max_p, 'kväll')
+                forklaring_min = self._forklara_obalans(min_p, 'kväll')
                 schedule.lagg_till_konflikt(Konflikt(
                     datum=None,
                     pass_typ=None,
-                    typ='obalanserad_kvall_natt',
-                    beskrivning=f'Ojämn fördelning av kväll/nattpass: '
-                               f'{max_person} har {max_kn} pass medan andra har {min_kn}',
+                    typ='obalanserad_kvallsfordelning',
+                    beskrivning=f'Ojämn kvällsfördelning: {max_p} har {max_v} kvällspass{forklaring_max}, '
+                               f'{min_p} har {min_v}{forklaring_min}',
+                    allvarlighetsgrad=1
+                ))
+
+        # Nattfördelning (separat)
+        if natt_per_person:
+            max_v = max(natt_per_person.values())
+            min_v = min(natt_per_person.values(), default=0)
+            if max_v - min_v > 2:
+                max_p = max(natt_per_person, key=natt_per_person.get)
+                min_p = min(natt_per_person, key=natt_per_person.get)
+                forklaring_max = self._forklara_obalans(max_p, 'natt')
+                forklaring_min = self._forklara_obalans(min_p, 'natt')
+                schedule.lagg_till_konflikt(Konflikt(
+                    datum=None,
+                    pass_typ=None,
+                    typ='obalanserad_nattfordelning',
+                    beskrivning=f'Ojämn nattfördelning: {max_p} har {max_v} nattpass{forklaring_max}, '
+                               f'{min_p} har {min_v}{forklaring_min}',
                     allvarlighetsgrad=1
                 ))
 
