@@ -21,6 +21,7 @@ class SchemaOptimizer:
         # Konfiguration
         self.solver.parameters.max_time_in_seconds = 30.0
         self.solver.parameters.log_search_progress = False
+        self.solver.parameters.random_seed = 42  # Deterministisk: samma input → samma schema
 
     def optimera(self) -> Schedule:
         """
