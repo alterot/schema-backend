@@ -541,6 +541,14 @@ def get_schedule(period: str):
         result['source'] = 'generated'
         result['message'] = f'Schema genererat för {period} med {len(personal)} personal och {len(shifts)} pass'
 
+        # Include helgdagar so frontend knows which days use helg-bemanning
+        helgdagar = [
+            s.datum.isoformat() for s in shifts
+            if s.datum.weekday() < 5 and is_helgdag(s.datum)
+        ]
+        # Deduplicate (3 shifts per day)
+        result['helgdagar'] = sorted(set(helgdagar))
+
         # Include franvaro periods so frontend can render per-day absence
         franvaro_perioder = {}
         for p in personal:
