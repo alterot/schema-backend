@@ -32,6 +32,8 @@ class Person:
     anstallning: int  # 75, 100, etc. (procent)
     tillganglighet: List[str]  # ["Mon", "Tue", "Wed", "Thu", "Fri"]
     franvaro: List[Franvaro] = field(default_factory=list)
+    exclude_pass_typer: List[str] = field(default_factory=list)  # ["natt", "kväll"]
+    lasta_pass: List[Dict] = field(default_factory=list)  # [{"datum": date, "pass_typ": "dag"}]
 
     # Beräknade värden
     max_arbetspass_per_manad: int = field(init=False)

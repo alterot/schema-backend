@@ -150,6 +150,8 @@ class ConstraintBuilder:
         self.constraint_max_arbetsdagar_i_rad()
         self.constraint_anstallningsgrad()
         self.constraint_overtid()  # NY: Övertidsbegränsningar
+        self.constraint_passrestriktioner()
+        self.constraint_lasta_pass()
 
     def constraint_en_person_ett_pass_per_dag(self):
         """
@@ -432,6 +434,39 @@ class ConstraintBuilder:
                     
                     # Begränsa totalt antal dagar per år
                     self.model.Add(sum(assignments_i_ar) <= total_max_dagar)
+
+    def constraint_passrestriktioner(self):
+        """
+        Blockera specifika passtyper per person.
+
+        Exempel: "Erik ska inte jobba natt" → exclude_pass_typer = ["natt"]
+        Sätter assignment till 0 för alla shifts med blockerad passtyp.
+        """
+        for person in self.personal:
+            if not person.exclude_pass_typer:
+                continue
+            for shift in self.shifts:
+                if shift.pass_typ.value in person.exclude_pass_typer:
+                    self.model.Add(self.assignments[(person.namn, shift)] == 0)
+
+    def constraint_lasta_pass(self):
+        """
+        Tvinga person att jobba ett specifikt pass på ett specifikt datum.
+
+        Exempel: "Anna MÅSTE jobba dag den 22:a" → lasta_pass = [{"datum": date(2026,6,22), "pass_typ": "dag"}]
+        Sätter assignment till 1 för matchande shift.
+        """
+        for person in self.personal:
+            if not person.lasta_pass:
+                continue
+            for pinned in person.lasta_pass:
+                matching_shift = next(
+                    (s for s in self.shifts
+                     if s.datum == pinned['datum'] and s.pass_typ.value == pinned['pass_typ']),
+                    None
+                )
+                if matching_shift:
+                    self.model.Add(self.assignments[(person.namn, matching_shift)] == 1)
 
     # Mjuka mål (jämn helg/kväll-natt-fördelning) hanteras nu direkt
     # i optimizer.py:_definiera_objektfunktion() som del av objective function.

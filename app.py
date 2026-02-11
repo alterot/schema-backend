@@ -121,6 +121,19 @@ def _generate_schedule_for_period(period: str, override_personal=None, override_
                 person.tillganglighet = mod['tillganglighet']
                 app.logger.info(f'Personal override: {person.namn} tillgänglighet {old_tillg} -> {person.tillganglighet}')
 
+            # exclude_pass_typer: blockera specifika passtyper
+            if 'exclude_pass_typer' in mod:
+                person.exclude_pass_typer = mod['exclude_pass_typer']
+                app.logger.info(f'Personal override: {person.namn} exclude_pass_typer {person.exclude_pass_typer}')
+
+            # lasta_pass: tvinga person till specifikt pass/datum
+            if 'lasta_pass' in mod:
+                person.lasta_pass = [
+                    {'datum': date.fromisoformat(lp['datum']), 'pass_typ': lp['pass_typ']}
+                    for lp in mod['lasta_pass']
+                ]
+                app.logger.info(f'Personal override: {person.namn} lasta_pass {mod["lasta_pass"]}')
+
     app.logger.info(f'Generating schedule for {period}: {len(personal)} personal, {len(shifts)} shifts')
 
     optimizer = SchemaOptimizer(personal, shifts)
