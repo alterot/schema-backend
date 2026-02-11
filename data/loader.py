@@ -8,6 +8,7 @@ import os
 from typing import Dict, List, Any, Optional
 from datetime import date
 from functools import lru_cache
+import holidays
 
 # Path to the data file
 DATA_FILE = os.path.join(os.path.dirname(__file__), 'realistic_hospital_data.json')
@@ -128,8 +129,10 @@ def generate_shifts_for_period(
     shifts = []
     current_date = start_date
 
+    se_holidays = holidays.SE(years=[start_date.year, end_date.year])
+
     while current_date <= end_date:
-        is_weekend = current_date.weekday() >= 5  # Lordag = 5, Sondag = 6
+        is_weekend = current_date.weekday() >= 5 or current_date in se_holidays
         behov = get_bemanningsbehov(is_weekend)
 
         for pass_typ in ['dag', 'kvall', 'natt']:

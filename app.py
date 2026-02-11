@@ -151,11 +151,13 @@ def _generate_schedule_for_period(period: str, override_personal=None, override_
 
 def _generate_shifts_with_custom_behov(start_date, end_date, avdelning, bemanningsbehov):
     """Generate shifts using custom bemanningsbehov instead of JSON file data."""
+    import holidays
+    se_holidays = holidays.SE(years=[start_date.year, end_date.year])
     shifts = []
     current_date = start_date
 
     while current_date <= end_date:
-        is_weekend = current_date.weekday() >= 5
+        is_weekend = current_date.weekday() >= 5 or current_date in se_holidays
         behov_typ = 'helg' if is_weekend else 'vardag'
         behov = bemanningsbehov.get(behov_typ, bemanningsbehov.get('vardag', {}))
 
