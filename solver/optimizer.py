@@ -327,48 +327,8 @@ class SchemaOptimizer:
         # Kontrollera fördelning per kategori
         self._kontrollera_fordelning(schedule)
 
-    def _forklara_obalans(self, person_namn, kategori):
-        """Försöker förklara varför en person har fler/färre pass av en viss typ."""
-        person = next((p for p in self.personal if p.namn == person_namn), None)
-        if not person:
-            return ''
-
-        orsaker = []
-
-        dag_namn = {'Mon': 'mån', 'Tue': 'tis', 'Wed': 'ons', 'Thu': 'tor',
-                    'Fri': 'fre', 'Sat': 'lör', 'Sun': 'sön'}
-
-        # Begränsad tillgänglighet?
-        alla_dagar = {'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'}
-        saknade = alla_dagar - set(person.tillganglighet)
-        if saknade:
-            saknade_sv = sorted([dag_namn.get(d, d) for d in saknade])
-            if kategori == 'helg' and ('lör' in saknade_sv or 'sön' in saknade_sv):
-                orsaker.append(f'ej tillgänglig {", ".join(saknade_sv)}')
-            elif kategori != 'helg' and saknade:
-                orsaker.append(f'ej tillgänglig {", ".join(saknade_sv)}')
-
-        # Frånvaro?
-        if person.franvaro:
-            antal = len(person.franvaro)
-            orsaker.append(f'{antal} frånvaroperiod{"er" if antal > 1 else ""}')
-
-        # Passrestriktioner?
-        if person.exclude_pass_typer:
-            typer = ', '.join(person.exclude_pass_typer)
-            orsaker.append(f'får ej jobba {typer}')
-
-        # Deltid?
-        if person.anstallning < 100:
-            orsaker.append(f'{person.anstallning}% tjänst')
-
-        if orsaker:
-            return f' — {"; ".join(orsaker)}'
-        return ' — begränsat av övriga schemavillkor'
-
     def _kontrollera_fordelning(self, schedule: Schedule):
         """Kontrollerar om pass är jämnt fördelade, separat per kategori."""
-        # Samla data per person
         helg_per_person = defaultdict(int)
         kvall_per_person = defaultdict(int)
         natt_per_person = defaultdict(int)
@@ -382,57 +342,19 @@ class SchemaOptimizer:
                 elif rad.pass_typ == PassTyp.NATT:
                     natt_per_person[person_namn] += 1
 
-        # Helgfördelning
-        if helg_per_person:
-            max_v = max(helg_per_person.values())
-            min_v = min(helg_per_person.values(), default=0)
+        for label, data in [('helg', helg_per_person), ('kväll', kvall_per_person), ('natt', natt_per_person)]:
+            if not data:
+                continue
+            max_v = max(data.values())
+            min_v = min(data.values(), default=0)
             if max_v - min_v > 2:
-                max_p = max(helg_per_person, key=helg_per_person.get)
-                min_p = min(helg_per_person, key=helg_per_person.get)
-                forklaring_max = self._forklara_obalans(max_p, 'helg')
-                forklaring_min = self._forklara_obalans(min_p, 'helg')
+                max_p = max(data, key=data.get)
+                min_p = min(data, key=data.get)
                 schedule.lagg_till_konflikt(Konflikt(
                     datum=None,
                     pass_typ=None,
-                    typ='obalanserad_helgfordelning',
-                    beskrivning=f'Ojämn helgfördelning: {max_p} har {max_v} helgpass{forklaring_max}, '
-                               f'{min_p} har {min_v}{forklaring_min}',
-                    allvarlighetsgrad=1
-                ))
-
-        # Kvällsfördelning (separat)
-        if kvall_per_person:
-            max_v = max(kvall_per_person.values())
-            min_v = min(kvall_per_person.values(), default=0)
-            if max_v - min_v > 2:
-                max_p = max(kvall_per_person, key=kvall_per_person.get)
-                min_p = min(kvall_per_person, key=kvall_per_person.get)
-                forklaring_max = self._forklara_obalans(max_p, 'kväll')
-                forklaring_min = self._forklara_obalans(min_p, 'kväll')
-                schedule.lagg_till_konflikt(Konflikt(
-                    datum=None,
-                    pass_typ=None,
-                    typ='obalanserad_kvallsfordelning',
-                    beskrivning=f'Ojämn kvällsfördelning: {max_p} har {max_v} kvällspass{forklaring_max}, '
-                               f'{min_p} har {min_v}{forklaring_min}',
-                    allvarlighetsgrad=1
-                ))
-
-        # Nattfördelning (separat)
-        if natt_per_person:
-            max_v = max(natt_per_person.values())
-            min_v = min(natt_per_person.values(), default=0)
-            if max_v - min_v > 2:
-                max_p = max(natt_per_person, key=natt_per_person.get)
-                min_p = min(natt_per_person, key=natt_per_person.get)
-                forklaring_max = self._forklara_obalans(max_p, 'natt')
-                forklaring_min = self._forklara_obalans(min_p, 'natt')
-                schedule.lagg_till_konflikt(Konflikt(
-                    datum=None,
-                    pass_typ=None,
-                    typ='obalanserad_nattfordelning',
-                    beskrivning=f'Ojämn nattfördelning: {max_p} har {max_v} nattpass{forklaring_max}, '
-                               f'{min_p} har {min_v}{forklaring_min}',
+                    typ=f'obalanserad_{label}fordelning',
+                    beskrivning=f'Ojämn {label}fördelning: {max_p} {max_v}, {min_p} {min_v}',
                     allvarlighetsgrad=1
                 ))
 
