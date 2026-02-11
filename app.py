@@ -28,7 +28,7 @@ CORS(app, resources={
 })
 
 
-def _generate_schedule_for_period(period: str, override_personal=None, override_bemanningsbehov=None, constraint_overrides=None):
+def _generate_schedule_for_period(period: str, override_personal=None, override_bemanningsbehov=None, personal_overrides=None):
     """
     Shared helper: Generate a schedule for a YYYY-MM period using the solver.
 
@@ -36,8 +36,9 @@ def _generate_schedule_for_period(period: str, override_personal=None, override_
         period: YYYY-MM format
         override_personal: Optional list of person dicts from frontend (localStorage)
         override_bemanningsbehov: Optional dict with vardag/helg requirements from frontend
-        constraint_overrides: Optional dict with { extra_pass_per_person: int, extra_pass_roll: str }
-                              Temporarily increases max_arbetspass_per_manad for matching roles.
+        personal_overrides: Optional list of dicts with modifications to apply to personal
+                            before running the solver. Supports: add_franvaro, extra_pass,
+                            tillganglighet, action:"add" (vikarie).
 
     Returns (personal, shifts, schedule, metrics) tuple.
     Raises ValueError on invalid period.
@@ -71,18 +72,54 @@ def _generate_schedule_for_period(period: str, override_personal=None, override_
     personal = [Person.from_dict(p) for p in personal_data]
     shifts = [Shift.from_dict(s) for s in shifts_data]
 
-    # Apply constraint overrides (overtime permission)
-    if constraint_overrides:
-        extra_pass = constraint_overrides.get('extra_pass_per_person', 0)
-        extra_roll = constraint_overrides.get('extra_pass_roll', 'alla')
-        if extra_pass and extra_pass > 0:
-            for person in personal:
-                if extra_roll == 'alla' or person.roll == extra_roll:
-                    person.max_arbetspass_per_manad += extra_pass
-                    app.logger.info(
-                        f'Override: {person.namn} ({person.roll}) max_pass '
-                        f'{person.max_arbetspass_per_manad - extra_pass} -> {person.max_arbetspass_per_manad}'
-                    )
+    # Apply personal_overrides (frånvaro, övertid, vikarier, tillgänglighet)
+    if personal_overrides:
+        from models.person import Franvaro
+        for mod in personal_overrides:
+            namn = mod.get('namn', '')
+
+            # Action "add": lägg till ny person (vikarie)
+            if mod.get('action') == 'add':
+                new_person_data = {
+                    'namn': namn,
+                    'roll': mod.get('roll', 'underskoterska'),
+                    'anstallning': mod.get('anstallning', 100),
+                    'tillganglighet': mod.get('tillganglighet', ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']),
+                    'franvaro': [],
+                }
+                personal.append(Person.from_dict(new_person_data))
+                app.logger.info(f'Personal override: lade till vikarie {namn} ({new_person_data["roll"]})')
+                continue
+
+            # Hitta befintlig person
+            matched = [p for p in personal if p.namn.lower() == namn.lower()]
+            if not matched:
+                app.logger.warning(f'Personal override: person "{namn}" hittades inte')
+                continue
+            person = matched[0]
+
+            # add_franvaro: lägg till frånvaroperiod
+            if 'add_franvaro' in mod:
+                f = mod['add_franvaro']
+                new_franvaro = Franvaro(
+                    start=date.fromisoformat(f['start']),
+                    slut=date.fromisoformat(f['slut']),
+                    typ=f.get('typ', 'semester'),
+                )
+                person.franvaro.append(new_franvaro)
+                app.logger.info(f'Personal override: {person.namn} frånvaro {new_franvaro.typ} {new_franvaro.start}-{new_franvaro.slut}')
+
+            # extra_pass: öka max arbetspass (övertid)
+            if 'extra_pass' in mod:
+                old_max = person.max_arbetspass_per_manad
+                person.max_arbetspass_per_manad += mod['extra_pass']
+                app.logger.info(f'Personal override: {person.namn} max_pass {old_max} -> {person.max_arbetspass_per_manad}')
+
+            # tillganglighet: ändra vilka dagar personen kan jobba
+            if 'tillganglighet' in mod:
+                old_tillg = person.tillganglighet
+                person.tillganglighet = mod['tillganglighet']
+                app.logger.info(f'Personal override: {person.namn} tillgänglighet {old_tillg} -> {person.tillganglighet}')
 
     app.logger.info(f'Generating schedule for {period}: {len(personal)} personal, {len(shifts)} shifts')
 
@@ -456,17 +493,17 @@ def get_schedule(period: str):
         # Extract optional overrides from POST body
         override_personal = None
         override_behov = None
-        constraint_overrides = None
+        personal_overrides = None
         regenerate = False
         if request.method == 'POST':
             data = request.get_json() or {}
             override_personal = data.get('personal')
             override_behov = data.get('bemanningsbehov')
-            constraint_overrides = data.get('constraint_overrides')
+            personal_overrides = data.get('personal_overrides')
             regenerate = data.get('regenerate', False)
 
-        # Constraint overrides always require regeneration (can't use cached schedule)
-        if constraint_overrides:
+        # Personal overrides always require regeneration (can't use cached schedule)
+        if personal_overrides:
             regenerate = True
 
         # Check for previously saved schedule (skip if regenerate requested)
@@ -482,7 +519,7 @@ def get_schedule(period: str):
             period,
             override_personal=override_personal,
             override_bemanningsbehov=override_behov,
-            constraint_overrides=constraint_overrides,
+            personal_overrides=personal_overrides,
         )
 
         result = schedule.to_dict()
