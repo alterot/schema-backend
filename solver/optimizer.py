@@ -62,13 +62,13 @@ class SchemaOptimizer:
     def _definiera_objektfunktion(self):
         """
         Definierar vad vi vill optimera.
-        Sju mål med viktning balanserade för rättvisa:
-          1. Minimera överbemanning (vikt 3 per term — många termer)
-          2. Jämn fördelning av totalt antal pass (vikt 10)
-          3. Jämn fördelning av helgpass (vikt 8)
-          4. Jämn fördelning av kvällspass (vikt 6)
-          5. Jämn fördelning av nattpass (vikt 6)
-          6. Undvik >3 kväll- eller nattpass i rad (vikt 4 per förekomst)
+        Alla rättvisemål jämför INOM SAMMA ROLL (SSK mot SSK, ej SSK mot läkare):
+          1. Minimera överbemanning (vikt 3 per term)
+          2. Jämn total-fördelning per roll (vikt 10)
+          3. Jämn helgfördelning per roll (vikt 8)
+          4. Jämn kvällsfördelning per roll (vikt 6)
+          5. Jämn nattfördelning per roll (vikt 6)
+          6. Undvik >3 kväll/natt i rad (vikt 4 per förekomst)
           7. Undvik bakåtrotation natt→ledig→dag (vikt 3 per förekomst)
         """
         penalty_terms = []
@@ -90,81 +90,58 @@ class SchemaOptimizer:
                     self.model.Add(over >= sum(personer_med_roll) - antal_krav)
                     penalty_terms.append(over * 3)
 
-        # --- Mål 2: Jämn total-fördelning ---
-        # Viktigaste rättvisemålet: ingen ska ha markant fler/färre pass totalt
-        total_vars = []
-        for person in self.personal:
-            t = self.model.NewIntVar(0, len(self.shifts), f'total_{person.namn}')
-            self.model.Add(t == sum(
-                self.assignments[(person.namn, s)] for s in self.shifts
-            ))
-            total_vars.append(t)
+        # --- Mål 2: Jämn total-fördelning per roll ---
+        # Viktigaste rättvisemålet: inom samma roll ska ingen ha markant fler/färre pass
+        roller = set(p.roll for p in self.personal)
+        for roll in roller:
+            roll_personal = [p for p in self.personal if p.roll == roll]
+            if len(roll_personal) < 2:
+                continue
+            total_vars = []
+            for person in roll_personal:
+                t = self.model.NewIntVar(0, len(self.shifts), f'total_{roll}_{person.namn}')
+                self.model.Add(t == sum(
+                    self.assignments[(person.namn, s)] for s in self.shifts
+                ))
+                total_vars.append(t)
 
-        if total_vars:
-            total_max = self.model.NewIntVar(0, len(self.shifts), 'total_max')
-            total_min = self.model.NewIntVar(0, len(self.shifts), 'total_min')
+            total_max = self.model.NewIntVar(0, len(self.shifts), f'total_{roll}_max')
+            total_min = self.model.NewIntVar(0, len(self.shifts), f'total_{roll}_min')
             self.model.AddMaxEquality(total_max, total_vars)
             self.model.AddMinEquality(total_min, total_vars)
-            total_spread = self.model.NewIntVar(0, len(self.shifts), 'total_spread')
+            total_spread = self.model.NewIntVar(0, len(self.shifts), f'total_{roll}_spread')
             self.model.Add(total_spread == total_max - total_min)
             penalty_terms.append(total_spread * 10)
 
-        # --- Mål 3: Jämn helgfördelning ---
+        # --- Mål 3-5: Jämn fördelning per roll (helg/kväll/natt) ---
         helg_shifts = [s for s in self.shifts if s.datum.weekday() >= 5]
-        if helg_shifts:
-            helgpass_vars = []
-            for person in self.personal:
-                h = self.model.NewIntVar(0, len(helg_shifts), f'helg_{person.namn}')
-                self.model.Add(h == sum(
-                    self.assignments[(person.namn, s)] for s in helg_shifts
-                ))
-                helgpass_vars.append(h)
-
-            helg_max = self.model.NewIntVar(0, len(helg_shifts), 'helg_max')
-            helg_min = self.model.NewIntVar(0, len(helg_shifts), 'helg_min')
-            self.model.AddMaxEquality(helg_max, helgpass_vars)
-            self.model.AddMinEquality(helg_min, helgpass_vars)
-            helg_spread = self.model.NewIntVar(0, len(helg_shifts), 'helg_spread')
-            self.model.Add(helg_spread == helg_max - helg_min)
-            penalty_terms.append(helg_spread * 8)
-
-        # --- Mål 4: Jämn kvällsfördelning (separat från natt) ---
         kvall_shifts = [s for s in self.shifts if s.pass_typ == PassTyp.KVALL]
-        if kvall_shifts:
-            kvall_vars = []
-            for person in self.personal:
-                kv = self.model.NewIntVar(0, len(kvall_shifts), f'kvall_{person.namn}')
-                self.model.Add(kv == sum(
-                    self.assignments[(person.namn, s)] for s in kvall_shifts
-                ))
-                kvall_vars.append(kv)
-
-            kvall_max = self.model.NewIntVar(0, len(kvall_shifts), 'kvall_max')
-            kvall_min = self.model.NewIntVar(0, len(kvall_shifts), 'kvall_min')
-            self.model.AddMaxEquality(kvall_max, kvall_vars)
-            self.model.AddMinEquality(kvall_min, kvall_vars)
-            kvall_spread = self.model.NewIntVar(0, len(kvall_shifts), 'kvall_spread')
-            self.model.Add(kvall_spread == kvall_max - kvall_min)
-            penalty_terms.append(kvall_spread * 6)
-
-        # --- Mål 5: Jämn nattfördelning (separat från kväll) ---
         natt_shifts = [s for s in self.shifts if s.pass_typ == PassTyp.NATT]
-        if natt_shifts:
-            natt_vars = []
-            for person in self.personal:
-                n = self.model.NewIntVar(0, len(natt_shifts), f'natt_{person.namn}')
-                self.model.Add(n == sum(
-                    self.assignments[(person.namn, s)] for s in natt_shifts
-                ))
-                natt_vars.append(n)
 
-            natt_max = self.model.NewIntVar(0, len(natt_shifts), 'natt_max')
-            natt_min = self.model.NewIntVar(0, len(natt_shifts), 'natt_min')
-            self.model.AddMaxEquality(natt_max, natt_vars)
-            self.model.AddMinEquality(natt_min, natt_vars)
-            natt_spread = self.model.NewIntVar(0, len(natt_shifts), 'natt_spread')
-            self.model.Add(natt_spread == natt_max - natt_min)
-            penalty_terms.append(natt_spread * 6)
+        roller = set(p.roll for p in self.personal)
+        for roll in roller:
+            roll_personal = [p for p in self.personal if p.roll == roll]
+            if len(roll_personal) < 2:
+                continue
+
+            for label, shifts, vikt in [('helg', helg_shifts, 8), ('kvall', kvall_shifts, 6), ('natt', natt_shifts, 6)]:
+                if not shifts:
+                    continue
+                spread_vars = []
+                for person in roll_personal:
+                    v = self.model.NewIntVar(0, len(shifts), f'{label}_{roll}_{person.namn}')
+                    self.model.Add(v == sum(
+                        self.assignments[(person.namn, s)] for s in shifts
+                    ))
+                    spread_vars.append(v)
+
+                sp_max = self.model.NewIntVar(0, len(shifts), f'{label}_{roll}_max')
+                sp_min = self.model.NewIntVar(0, len(shifts), f'{label}_{roll}_min')
+                self.model.AddMaxEquality(sp_max, spread_vars)
+                self.model.AddMinEquality(sp_min, spread_vars)
+                spread = self.model.NewIntVar(0, len(shifts), f'{label}_{roll}_spread')
+                self.model.Add(spread == sp_max - sp_min)
+                penalty_terms.append(spread * vikt)
 
         # --- Mål 6: Undvik >3 kväll- eller nattpass i rad ---
         # Lång serie av samma obekväma passtyp är dåligt för hälsan
