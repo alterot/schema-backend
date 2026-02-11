@@ -328,25 +328,27 @@ class SchemaOptimizer:
         self._kontrollera_fordelning(schedule)
 
     def _kontrollera_fordelning(self, schedule: Schedule):
-        """Kontrollerar om pass är jämnt fördelade, separat per kategori."""
-        helg_per_person = defaultdict(int)
-        kvall_per_person = defaultdict(int)
-        natt_per_person = defaultdict(int)
+        """Kontrollerar om pass är jämnt fördelade, per roll och kategori."""
+        # Bygg roll-lookup
+        roll_for = {p.namn: p.roll for p in self.personal}
 
+        # Samla per (roll, kategori)
+        counts = defaultdict(lambda: defaultdict(int))  # (roll, kategori) -> {namn: antal}
         for rad in schedule.rader:
-            for person_namn in rad.personal:
+            for namn in rad.personal:
+                roll = roll_for.get(namn, 'okänd')
                 if rad.datum.weekday() >= 5:
-                    helg_per_person[person_namn] += 1
+                    counts[(roll, 'helg')][namn] += 1
                 if rad.pass_typ == PassTyp.KVALL:
-                    kvall_per_person[person_namn] += 1
+                    counts[(roll, 'kväll')][namn] += 1
                 elif rad.pass_typ == PassTyp.NATT:
-                    natt_per_person[person_namn] += 1
+                    counts[(roll, 'natt')][namn] += 1
 
-        for label, data in [('helg', helg_per_person), ('kväll', kvall_per_person), ('natt', natt_per_person)]:
-            if not data:
+        for (roll, label), data in counts.items():
+            if len(data) < 2:
                 continue
             max_v = max(data.values())
-            min_v = min(data.values(), default=0)
+            min_v = min(data.values())
             if max_v - min_v > 2:
                 max_p = max(data, key=data.get)
                 min_p = min(data, key=data.get)
@@ -354,7 +356,7 @@ class SchemaOptimizer:
                     datum=None,
                     pass_typ=None,
                     typ=f'obalanserad_{label}fordelning',
-                    beskrivning=f'Ojämn {label}fördelning: {max_p} {max_v}, {min_p} {min_v}',
+                    beskrivning=f'Ojämn {label}fördelning bland {roll}: {max_p} {max_v}, {min_p} {min_v}',
                     allvarlighetsgrad=1
                 ))
 
