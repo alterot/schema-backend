@@ -4,14 +4,19 @@ from typing import Dict, Any
 import traceback
 import json
 import os
+import time
 from datetime import date, timedelta, datetime
 from calendar import monthrange
+from dotenv import load_dotenv
+
+load_dotenv()
 
 from models import Person, Shift
 from solver import SchemaOptimizer
 from utils import validate_input, ValidationError, calculate_all_metrics
 from data import get_personal, get_bemanningsbehov, get_regler, get_avdelning, generate_shifts_for_period, is_helgdag
 from utils.schedule_analyzer import find_conflicts, suggest_solutions, calculate_impact
+from utils.supabase_client import save_audit_log
 
 # Path for saving schedules to disk
 SAVED_SCHEDULES_DIR = os.path.join(os.path.dirname(__file__), 'data', 'saved_schedules')
@@ -528,12 +533,14 @@ def get_schedule(period: str):
                 return jsonify(saved), 200
 
         # Generate new schedule via solver
+        gen_start = time.time()
         personal, shifts, schedule, metrics = _generate_schedule_for_period(
             period,
             override_personal=override_personal,
             override_bemanningsbehov=override_behov,
             personal_overrides=personal_overrides,
         )
+        duration_ms = int((time.time() - gen_start) * 1000)
 
         result = schedule.to_dict()
         result['metrics'] = metrics
@@ -566,6 +573,32 @@ def get_schedule(period: str):
         with open(filepath, 'w', encoding='utf-8') as f:
             json.dump(result, f, ensure_ascii=False, indent=2)
         app.logger.info(f'Schema auto-sparat till {filepath}')
+
+        # Audit log to Supabase
+        has_infeasible = any(
+            (k.typ if hasattr(k, 'typ') else k.get('typ', '')) == 'infeasible'
+            for k in schedule.konflikter
+        )
+        solver_status = 'INFEASIBLE' if has_infeasible else 'OPTIMAL'
+
+        user_input_text = None
+        ai_reasoning_text = None
+        if request.method == 'POST' and data:
+            user_input_text = data.get('user_input')
+            ai_reasoning_text = data.get('ai_reasoning')
+
+        save_audit_log(
+            period=period,
+            schedule_data=result.get('schema', []),
+            metrics=metrics,
+            konflikter=schedule.konflikter,
+            solver_status=solver_status,
+            antal_personal=len(personal),
+            duration_ms=duration_ms,
+            personal_overrides=personal_overrides,
+            user_input=user_input_text,
+            ai_reasoning=ai_reasoning_text,
+        )
 
         return jsonify(result), 200
 
