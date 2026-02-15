@@ -26,7 +26,7 @@ app = Flask(__name__)
 # Konfigurera CORS för att tillåta React frontend
 CORS(app, resources={
     r"/api/*": {
-        "origins": ["http://localhost:3000", "http://localhost:5173"],
+        "origins": ["http://localhost:3000", "http://localhost:5173", "https://alterot.github.io"],
         "methods": ["GET", "POST", "OPTIONS"],
         "allow_headers": ["Content-Type"]
     }
