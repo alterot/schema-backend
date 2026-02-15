@@ -354,22 +354,26 @@ class SchemaOptimizer:
             dagar = person.tillganglighet or []
             dagar_sv = [dag_namn.get(d, d) for d in dagar]
             helg_dagar = sum(1 for d in dagar if d in ('Sat', 'Sun'))
-            total_dagar = len(dagar)
 
-            if label == 'helg' and total_dagar > 0:
-                delar.append(f'{namn} jobbar {", ".join(dagar_sv)} ({helg_dagar} av {total_dagar} dagar är helg)')
+            if label == 'helg':
+                helg_str = 'inkl. lör–sön' if helg_dagar == 2 else ('inkl. lör' if 'Sat' in dagar else ('inkl. sön' if 'Sun' in dagar else 'inga helgdagar'))
+                delar.append(f'{namn} kan jobba {", ".join(dagar_sv)} ({helg_str})')
             elif label in ('kväll', 'natt'):
                 excluded = person.exclude_pass_typer or []
-                if label in excluded or 'kväll' in excluded and label == 'kväll' or 'natt' in excluded and label == 'natt':
+                if label in excluded:
                     delar.append(f'{namn} har passrestriktion (ej {label})')
                 elif person.anstallning < 100:
                     delar.append(f'{namn} är {person.anstallning}% (färre pass totalt)')
                 else:
-                    delar.append(f'{namn} jobbar {", ".join(dagar_sv)}')
+                    delar.append(f'{namn} kan jobba {", ".join(dagar_sv)}')
 
-        if delar:
-            return 'Orsak: ' + '; '.join(delar) + '. Skillnaden beror på personalens schemalagda dagar, inte orättvis fördelning.'
-        return ''
+        if not delar:
+            return ''
+
+        orsak = '; '.join(delar)
+        if label == 'helg':
+            return f'{orsak}. Den med fler tillgängliga helgdagar får därför fler helgpass.'
+        return f'{orsak}.'
 
     def _identifiera_orsakar_till_infeasibility(self, schedule: Schedule):
         """
