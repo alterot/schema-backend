@@ -306,8 +306,9 @@ class SchemaOptimizer:
 
     def _kontrollera_fordelning(self, schedule: Schedule):
         """Kontrollerar om pass är jämnt fördelade, per roll och kategori."""
-        # Bygg roll-lookup
+        # Bygg roll-lookup och person-lookup
         roll_for = {p.namn: p.roll for p in self.personal}
+        person_for = {p.namn: p for p in self.personal}
 
         # Samla per (roll, kategori)
         counts = defaultdict(lambda: defaultdict(int))  # (roll, kategori) -> {namn: antal}
@@ -321,6 +322,8 @@ class SchemaOptimizer:
                 elif rad.pass_typ == PassTyp.NATT:
                     counts[(roll, 'natt')][namn] += 1
 
+        dag_namn = {'Mon': 'mån', 'Tue': 'tis', 'Wed': 'ons', 'Thu': 'tor', 'Fri': 'fre', 'Sat': 'lör', 'Sun': 'sön'}
+
         for (roll, label), data in counts.items():
             if len(data) < 2:
                 continue
@@ -329,13 +332,44 @@ class SchemaOptimizer:
             if max_v - min_v > 2:
                 max_p = max(data, key=data.get)
                 min_p = min(data, key=data.get)
+
+                # Bygg förklaring med faktisk personaldata
+                forklaring = self._forklara_obalans(max_p, min_p, label, person_for, dag_namn)
+
                 schedule.lagg_till_konflikt(Konflikt(
                     datum=None,
                     pass_typ=None,
                     typ=f'obalanserad_{label}fordelning',
-                    beskrivning=f'Ojämn {label}fördelning bland {roll}: {max_p} {max_v}, {min_p} {min_v}',
+                    beskrivning=f'Ojämn {label}fördelning bland {roll}: {max_p} {max_v} {label}pass, {min_p} {min_v}. {forklaring}',
                     allvarlighetsgrad=1
                 ))
+
+    def _forklara_obalans(self, max_p, min_p, label, person_for, dag_namn):
+        """Bygger en klartext-förklaring av varför fördelningen är ojämn."""
+        delar = []
+        for namn in [max_p, min_p]:
+            person = person_for.get(namn)
+            if not person:
+                continue
+            dagar = person.tillganglighet or []
+            dagar_sv = [dag_namn.get(d, d) for d in dagar]
+            helg_dagar = sum(1 for d in dagar if d in ('Sat', 'Sun'))
+            total_dagar = len(dagar)
+
+            if label == 'helg' and total_dagar > 0:
+                delar.append(f'{namn} jobbar {", ".join(dagar_sv)} ({helg_dagar} av {total_dagar} dagar är helg)')
+            elif label in ('kväll', 'natt'):
+                excluded = person.exclude_pass_typer or []
+                if label in excluded or 'kväll' in excluded and label == 'kväll' or 'natt' in excluded and label == 'natt':
+                    delar.append(f'{namn} har passrestriktion (ej {label})')
+                elif person.anstallning < 100:
+                    delar.append(f'{namn} är {person.anstallning}% (färre pass totalt)')
+                else:
+                    delar.append(f'{namn} jobbar {", ".join(dagar_sv)}')
+
+        if delar:
+            return 'Orsak: ' + '; '.join(delar) + '. Skillnaden beror på personalens schemalagda dagar, inte orättvis fördelning.'
+        return ''
 
     def _identifiera_orsakar_till_infeasibility(self, schedule: Schedule):
         """
