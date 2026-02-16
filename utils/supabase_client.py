@@ -41,6 +41,7 @@ def save_audit_log(
     personal_overrides=None,
     user_input=None,
     ai_reasoning=None,
+    personal_lookup=None,
 ):
     """
     Save an audit log entry to Supabase.
@@ -81,6 +82,7 @@ def save_audit_log(
             'solver_status': solver_status,
             'antal_personal': antal_personal,
             'duration_ms': duration_ms,
+            'personal_lookup': personal_lookup or {},
         }
 
         client.table('audit_log').insert(row).execute()

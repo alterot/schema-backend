@@ -615,6 +615,7 @@ def get_schedule(period: str):
             personal_overrides=personal_overrides,
             user_input=user_input_text,
             ai_reasoning=ai_reasoning_text,
+            personal_lookup=result.get('personal_lookup', {}),
         )
 
         return jsonify(result), 200
