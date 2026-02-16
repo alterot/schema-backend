@@ -273,7 +273,8 @@ class SchemaOptimizer:
                 datum=shift.datum,
                 pass_typ=shift.pass_typ,
                 avdelning=shift.avdelning,
-                personal=personal_lista
+                personal=personal_lista,
+                duration_hours=shift.duration_hours
             )
             schedule.lagg_till_rad(schema_rad)
 

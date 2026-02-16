@@ -37,11 +37,14 @@ class Person:
 
     # Beräknade värden
     max_arbetspass_per_manad: int = field(init=False)
+    max_timmar_per_manad: int = field(init=False)
 
     def __post_init__(self):
-        """Beräknar max antal arbetspass baserat på anställningsgrad"""
+        """Beräknar max arbetstid baserat på anställningsgrad"""
         # Approximation: 100% ≈ 20 dagar/månad, 75% ≈ 15 dagar/månad
         self.max_arbetspass_per_manad = int((self.anstallning / 100) * 20)
+        # Juridiskt korrekt: 100% = 40h/vecka ≈ 160h/månad (Arbetstidslagen § 5)
+        self.max_timmar_per_manad = int((self.anstallning / 100) * 160)
 
     def ar_tillganglig(self, datum: date) -> bool:
         """Kontrollerar om personen är tillgänglig ett visst datum"""

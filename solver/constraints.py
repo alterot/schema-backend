@@ -337,20 +337,16 @@ class ConstraintBuilder:
 
     def constraint_anstallningsgrad(self):
         """
-        Respektera anställningsgrad (max antal pass per månad)
-        
+        Respektera anställningsgrad (max timmar per månad)
+
         Källa: Arbetstidslagen (1982:673) § 5, Anställningsavtal
-        
+
         Ordinarie arbetstid:
-        - Heltid (100%): 40 timmar/vecka ≈ 173 timmar/månad ≈ 20 dagar/månad
-        - Deltid (75%): 30 timmar/vecka ≈ 130 timmar/månad ≈ 15 dagar/månad
-        
-        OBS: Detta är approximation. Faktiskt antal pass beror på:
-        - Passlängd (8h, 10h, 12h)
-        - Månadens längd (28-31 dagar)
-        - Helger och storhelger
-        
-        För exakt beräkning behövs timbaserad schemaläggning (framtida version)
+        - Heltid (100%): 40 timmar/vecka ≈ 160 timmar/månad
+        - Deltid (75%): 30 timmar/vecka ≈ 120 timmar/månad
+
+        Timbaserad beräkning: summerar faktiska pass-timmar (8h, 10h, 12h)
+        istället för att räkna antal dagar.
         """
         # Gruppera shifts per månad
         shifts_per_manad = {}
@@ -363,41 +359,29 @@ class ConstraintBuilder:
         # För varje person och månad
         for person in self.personal:
             for manad_key, shifts_i_manad in shifts_per_manad.items():
-                assignments_i_manad = [
-                    self.assignments[(person.namn, shift)]
+                timmar_terms = [
+                    self.assignments[(person.namn, shift)] * shift.duration_hours
                     for shift in shifts_i_manad
                 ]
-                if assignments_i_manad:
-                    # Max antal pass enligt anställningsgrad
+                if timmar_terms:
+                    # Max timmar enligt anställningsgrad
                     self.model.Add(
-                        sum(assignments_i_manad) <= person.max_arbetspass_per_manad
+                        sum(timmar_terms) <= person.max_timmar_per_manad
                     )
 
     def constraint_overtid(self):
         """
         Begränsa övertid enligt lag
-        
+
         Källa: Arbetstidslagen (1982:673) § 8, 8a
-        
+
         Övertidsgränser:
         1. Allmän övertid: Max 200 timmar per kalenderår
         2. Extra övertid: Max 150 timmar per kalenderår (kräver "synnerliga skäl")
         3. Totalt: Max 350 timmar övertid per år
-        4. Per vecka: Max 48 timmar sammanlagd arbetstid i genomsnitt (4 månaders period)
-        5. Nödfallsövertid: Separat kategori vid natur/olyckshändelse
-        
-        Implementering i POC:
-        - Vi begränsar total övertid till 200h/år (endast allmän övertid)
-        - Extra övertid och nödfallsövertid hanteras manuellt
-        - Veckovis 48h-gräns kontrolleras separat
-        
-        OBS: Övertid = arbetstid utöver anställningsgrad
-        Exempel: 100% anställd som jobbar 22 dagar istället för 20 = 2 dagars övertid
-        
-        För produktionsmiljö:
-        - Timbaserad beräkning (inte dagar)
-        - Skillnad mellan allmän/extra/nödfallsövertid
-        - Kompensation (pengar eller ledighet)
+
+        Implementering: Timbaserad beräkning.
+        Ordinarie timmar/år + 200h övertid = max tillåtet.
         """
         # Gruppera shifts per år
         shifts_per_ar = {}
@@ -407,28 +391,20 @@ class ConstraintBuilder:
                 shifts_per_ar[ar_key] = []
             shifts_per_ar[ar_key].append(shift)
 
+        MAX_OVERTID_TIMMAR_PER_AR = 200  # Arbetstidslagen § 8
+
         # För varje person och år
         for person in self.personal:
             for ar_key, shifts_i_ar in shifts_per_ar.items():
-                assignments_i_ar = [
-                    self.assignments[(person.namn, shift)]
+                timmar_terms = [
+                    self.assignments[(person.namn, shift)] * shift.duration_hours
                     for shift in shifts_i_ar
                 ]
-                
-                if assignments_i_ar:
-                    # Beräkna max tillåtna dagar enligt anställningsgrad
-                    # Approximation: Ett år har ~12 månader
-                    max_dagar_enligt_anstallning = person.max_arbetspass_per_manad * 12
-                    
-                    # Övertidsgräns: 200h / 8h per dag ≈ 25 dagar
-                    # (Konservativ uppskattning)
-                    max_overtidsdagar = 25
-                    
-                    # Total max = ordinarie + övertid
-                    total_max_dagar = max_dagar_enligt_anstallning + max_overtidsdagar
-                    
-                    # Begränsa totalt antal dagar per år
-                    self.model.Add(sum(assignments_i_ar) <= total_max_dagar)
+
+                if timmar_terms:
+                    # Ordinarie timmar per år + lagstadgad övertidsgräns
+                    max_timmar_ar = person.max_timmar_per_manad * 12 + MAX_OVERTID_TIMMAR_PER_AR
+                    self.model.Add(sum(timmar_terms) <= max_timmar_ar)
 
     def constraint_passrestriktioner(self):
         """

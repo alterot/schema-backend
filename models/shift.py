@@ -60,6 +60,7 @@ class Shift:
     pass_typ: PassTyp
     avdelning: str
     kompetenskrav: Dict[str, int]  # {"sjukskoterska": 2, "underskoterska": 3}
+    duration_hours: int = 8  # Passlängd i timmar (8, 10, 12 etc.)
 
     def __hash__(self):
         """Gör Shift hashbar för användning i sets och dicts"""
@@ -79,5 +80,6 @@ class Shift:
             datum=date.fromisoformat(data['datum']),
             pass_typ=PassTyp(data['pass']),
             avdelning=data['avdelning'],
-            kompetenskrav=data['kompetenskrav']
+            kompetenskrav=data['kompetenskrav'],
+            duration_hours=data.get('duration_hours', 8)
         )

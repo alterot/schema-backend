@@ -31,6 +31,7 @@ class SchemaRad:
     pass_typ: PassTyp
     avdelning: str
     personal: List[str]  # Lista med personnamn
+    duration_hours: int = 8  # Passlängd i timmar
 
     def to_dict(self) -> Dict:
         """Konverterar till dict för JSON-svar"""

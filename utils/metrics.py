@@ -11,7 +11,6 @@ from collections import defaultdict
 HOURLY_RATE_SSK = 350  # Sjuksköterska
 HOURLY_RATE_USK = 280  # Undersköterska
 OVERTIME_MULTIPLIER = 1.5  # Övertidsersättning är 150%
-HOURS_PER_SHIFT = 8  # Varje pass är 8 timmar
 
 
 def calculate_coverage_percent(schema_rader: List, shifts: List) -> float:
@@ -38,29 +37,30 @@ def calculate_coverage_percent(schema_rader: List, shifts: List) -> float:
 def calculate_overtime_hours(schema_rader: List, personal: List) -> float:
     """
     Beräknar total övertid (timmar över anställningsgrad).
+    Använder faktiska pass-timmar istället för fast 8h-antagande.
 
     Args:
-        schema_rader: Lista med SchemaRad-objekt
-        personal: Lista med Person-objekt
+        schema_rader: Lista med SchemaRad-objekt (med duration_hours)
+        personal: Lista med Person-objekt (med max_timmar_per_manad)
 
     Returns:
         Total övertid i timmar
     """
-    # Räkna pass per person
-    pass_per_person = defaultdict(int)
+    # Summera faktiska timmar per person
+    timmar_per_person = defaultdict(float)
     for rad in schema_rader:
+        duration = getattr(rad, 'duration_hours', 8)
         for person_namn in rad.personal:
-            pass_per_person[person_namn] += 1
+            timmar_per_person[person_namn] += duration
 
-    # Skapa lookup för max pass per person
-    max_pass_lookup = {p.namn: p.max_arbetspass_per_manad for p in personal}
+    # Skapa lookup för max timmar per person
+    max_timmar_lookup = {p.namn: p.max_timmar_per_manad for p in personal}
 
     # Beräkna övertid
     total_overtime_hours = 0.0
-    for person_namn, antal_pass in pass_per_person.items():
-        max_pass = max_pass_lookup.get(person_namn, antal_pass)  # Fallback om person saknas
-        overtime_pass = max(0, antal_pass - max_pass)
-        total_overtime_hours += overtime_pass * HOURS_PER_SHIFT
+    for person_namn, timmar in timmar_per_person.items():
+        max_timmar = max_timmar_lookup.get(person_namn, timmar)
+        total_overtime_hours += max(0, timmar - max_timmar)
 
     return round(total_overtime_hours, 1)
 
@@ -85,29 +85,31 @@ def calculate_rule_violations(konflikter: List) -> int:
 def calculate_cost_kr(schema_rader: List, personal: List) -> float:
     """
     Beräknar total lönekostnad inklusive övertidsersättning.
+    Använder faktiska pass-timmar istället för fast 8h-antagande.
 
     Args:
-        schema_rader: Lista med SchemaRad-objekt
-        personal: Lista med Person-objekt
+        schema_rader: Lista med SchemaRad-objekt (med duration_hours)
+        personal: Lista med Person-objekt (med max_timmar_per_manad)
 
     Returns:
         Total kostnad i kronor
     """
-    # Skapa lookup för person -> roll
+    # Skapa lookup för person -> roll och max timmar
     person_roll_lookup = {p.namn: p.roll for p in personal}
-    max_pass_lookup = {p.namn: p.max_arbetspass_per_manad for p in personal}
+    max_timmar_lookup = {p.namn: p.max_timmar_per_manad for p in personal}
 
-    # Räkna pass per person
-    pass_per_person = defaultdict(int)
+    # Summera faktiska timmar per person
+    timmar_per_person = defaultdict(float)
     for rad in schema_rader:
+        duration = getattr(rad, 'duration_hours', 8)
         for person_namn in rad.personal:
-            pass_per_person[person_namn] += 1
+            timmar_per_person[person_namn] += duration
 
     total_cost = 0.0
 
-    for person_namn, antal_pass in pass_per_person.items():
-        roll = person_roll_lookup.get(person_namn, "underskoterska")  # Default till USK
-        max_pass = max_pass_lookup.get(person_namn, antal_pass)
+    for person_namn, total_timmar in timmar_per_person.items():
+        roll = person_roll_lookup.get(person_namn, "underskoterska")
+        max_timmar = max_timmar_lookup.get(person_namn, total_timmar)
 
         # Bestäm timpris baserat på roll
         if "sjuksköterska" in roll.lower() or "ssk" in roll.lower():
@@ -115,15 +117,13 @@ def calculate_cost_kr(schema_rader: List, personal: List) -> float:
         else:
             hourly_rate = HOURLY_RATE_USK
 
-        # Normala pass
-        normal_pass = min(antal_pass, max_pass)
-        normal_hours = normal_pass * HOURS_PER_SHIFT
-        normal_cost = normal_hours * hourly_rate
+        # Normala timmar
+        normal_timmar = min(total_timmar, max_timmar)
+        normal_cost = normal_timmar * hourly_rate
 
-        # Övertidspass
-        overtime_pass = max(0, antal_pass - max_pass)
-        overtime_hours = overtime_pass * HOURS_PER_SHIFT
-        overtime_cost = overtime_hours * hourly_rate * OVERTIME_MULTIPLIER
+        # Övertidstimmar
+        overtime_timmar = max(0, total_timmar - max_timmar)
+        overtime_cost = overtime_timmar * hourly_rate * OVERTIME_MULTIPLIER
 
         total_cost += normal_cost + overtime_cost
 
@@ -134,7 +134,7 @@ def calculate_quality_score(
     coverage_percent: float,
     rule_violations: int,
     overtime_hours: float,
-    total_shifts: int
+    total_hours: int
 ) -> int:
     """
     Beräknar sammanvägd kvalitetspoäng (0-100).
@@ -149,7 +149,7 @@ def calculate_quality_score(
         coverage_percent: Coverage i procent (0-100)
         rule_violations: Antal regelbrott
         overtime_hours: Total övertid i timmar
-        total_shifts: Totalt antal pass i schemat
+        total_hours: Totalt antal schemalagda timmar
 
     Returns:
         Quality score (0-100)
@@ -164,10 +164,9 @@ def calculate_quality_score(
 
     # Övertids-poäng (0-20)
     # Idealisk övertid = 0%, > 10% av totala timmar = 0 poäng
-    if total_shifts == 0:
+    if total_hours == 0:
         overtime_score = 20
     else:
-        total_hours = total_shifts * HOURS_PER_SHIFT
         overtime_percent = (overtime_hours / total_hours) * 100
         overtime_penalty = min(overtime_percent * 2, 20)
         overtime_score = 20 - overtime_penalty
@@ -204,7 +203,8 @@ def calculate_all_metrics(
     overtime = calculate_overtime_hours(schema_rader, personal)
     violations = calculate_rule_violations(konflikter)
     cost = calculate_cost_kr(schema_rader, personal)
-    quality = calculate_quality_score(coverage, violations, overtime, len(shifts))
+    total_hours = sum(getattr(s, 'duration_hours', 8) for s in shifts)
+    quality = calculate_quality_score(coverage, violations, overtime, total_hours)
 
     return {
         "coverage_percent": coverage,

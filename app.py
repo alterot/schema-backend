@@ -118,6 +118,7 @@ def _generate_schedule_for_period(period: str, override_personal=None, override_
             if 'extra_pass' in mod:
                 old_max = person.max_arbetspass_per_manad
                 person.max_arbetspass_per_manad += mod['extra_pass']
+                person.max_timmar_per_manad += mod['extra_pass'] * 8  # Approximera 8h/pass
                 app.logger.info(f'Personal override: {person.namn} max_pass {old_max} -> {person.max_arbetspass_per_manad}')
 
             # tillganglighet: ändra vilka dagar personen kan jobba
