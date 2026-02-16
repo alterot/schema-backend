@@ -488,6 +488,15 @@ class ConstraintBuilder:
         kvall_shifts = [s for s in self.shifts if s.pass_typ == PassTyp.KVALL]
         natt_shifts = [s for s in self.shifts if s.pass_typ == PassTyp.NATT]
 
+        # Beräkna vilka som har frånvaro under perioden
+        alla_datum = set(s.datum for s in self.shifts)
+        har_franvaro = set()
+        for p in self.personal:
+            for f in p.franvaro:
+                if any(f.start <= d <= f.slut for d in alla_datum):
+                    har_franvaro.add(p.namn)
+                    break
+
         roller = set(p.roll for p in self.personal)
 
         for roll in roller:
@@ -495,30 +504,33 @@ class ConstraintBuilder:
             if len(roll_personal) < 2:
                 continue
 
-            # --- Helgpass: filtrera bort de med ojämförbar helgtillgänglighet ---
+            # --- Helgpass: filtrera bort de med ojämförbar helgtillgänglighet eller frånvaro ---
             if helg_shifts:
                 jamforbar_helg = [
                     p for p in roll_personal
                     if sum(1 for d in p.tillganglighet if d in ('Sat', 'Sun')) == 2
                     and p.anstallning >= 75
+                    and p.namn not in har_franvaro
                 ]
                 self._add_spread_constraint(jamforbar_helg, helg_shifts, roll, 'helg', MAX_SPREAD)
 
-            # --- Kvällspass: filtrera bort de med passrestriktion ---
+            # --- Kvällspass: filtrera bort de med passrestriktion eller frånvaro ---
             if kvall_shifts:
                 jamforbar_kvall = [
                     p for p in roll_personal
                     if 'kväll' not in (p.exclude_pass_typer or [])
                     and p.anstallning >= 75
+                    and p.namn not in har_franvaro
                 ]
                 self._add_spread_constraint(jamforbar_kvall, kvall_shifts, roll, 'kvall', MAX_SPREAD)
 
-            # --- Nattpass: filtrera bort de med passrestriktion ---
+            # --- Nattpass: filtrera bort de med passrestriktion eller frånvaro ---
             if natt_shifts:
                 jamforbar_natt = [
                     p for p in roll_personal
                     if 'natt' not in (p.exclude_pass_typer or [])
                     and p.anstallning >= 75
+                    and p.namn not in har_franvaro
                 ]
                 self._add_spread_constraint(jamforbar_natt, natt_shifts, roll, 'natt', MAX_SPREAD)
 

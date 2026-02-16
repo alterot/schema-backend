@@ -67,7 +67,8 @@ def calculate_overtime_hours(schema_rader: List, personal: List) -> float:
 
 def calculate_rule_violations(konflikter: List) -> int:
     """
-    Räknar antal constraints som bröts.
+    Räknar antal faktiska regelbrott (allvarlighetsgrad >= 1).
+    Överbemanning (allvarlighetsgrad 0) är info, inte ett regelbrott.
 
     Args:
         konflikter: Lista med Konflikt-objekt
@@ -75,7 +76,10 @@ def calculate_rule_violations(konflikter: List) -> int:
     Returns:
         Antal regelbrott
     """
-    return len(konflikter)
+    return sum(
+        1 for k in konflikter
+        if (k.allvarlighetsgrad if hasattr(k, 'allvarlighetsgrad') else k.get('allvarlighetsgrad', 1)) >= 1
+    )
 
 
 def calculate_cost_kr(schema_rader: List, personal: List) -> float:
