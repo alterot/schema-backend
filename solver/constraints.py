@@ -152,6 +152,7 @@ class ConstraintBuilder:
         self.constraint_overtid()  # NY: Övertidsbegränsningar
         self.constraint_passrestriktioner()
         self.constraint_lasta_pass()
+        self.constraint_jamn_fordelning()
 
     def constraint_en_person_ett_pass_per_dag(self):
         """
@@ -467,6 +468,81 @@ class ConstraintBuilder:
                 )
                 if matching_shift:
                     self.model.Add(self.assignments[(person.namn, matching_shift)] == 1)
+
+    def constraint_jamn_fordelning(self):
+        """
+        Tvingar jämn fördelning av obekväma pass (helg, kväll, natt) inom samma roll.
+
+        Max 2 pass skillnad mellan person med flest och färst — men BARA mellan
+        personer med jämförbara förutsättningar. Personal med begränsad
+        tillgänglighet (t.ex. bara tor–sön) eller passrestriktioner filtreras
+        bort från jämförelsen, eftersom de matematiskt inte KAN fördelas lika.
+
+        Juridisk grund: Offentlig sektor kräver rättvis och transparent
+        arbetsfördelning. Ojämn fördelning utan saklig grund kan strida mot
+        diskrimineringslagen och kollektivavtal.
+        """
+        MAX_SPREAD = 2
+
+        helg_shifts = [s for s in self.shifts if s.datum.weekday() >= 5]
+        kvall_shifts = [s for s in self.shifts if s.pass_typ == PassTyp.KVALL]
+        natt_shifts = [s for s in self.shifts if s.pass_typ == PassTyp.NATT]
+
+        roller = set(p.roll for p in self.personal)
+
+        for roll in roller:
+            roll_personal = [p for p in self.personal if p.roll == roll]
+            if len(roll_personal) < 2:
+                continue
+
+            # --- Helgpass: filtrera bort de med ojämförbar helgtillgänglighet ---
+            if helg_shifts:
+                jamforbar_helg = [
+                    p for p in roll_personal
+                    if sum(1 for d in p.tillganglighet if d in ('Sat', 'Sun')) == 2
+                    and p.anstallning >= 75
+                ]
+                self._add_spread_constraint(jamforbar_helg, helg_shifts, roll, 'helg', MAX_SPREAD)
+
+            # --- Kvällspass: filtrera bort de med passrestriktion ---
+            if kvall_shifts:
+                jamforbar_kvall = [
+                    p for p in roll_personal
+                    if 'kväll' not in (p.exclude_pass_typer or [])
+                    and p.anstallning >= 75
+                ]
+                self._add_spread_constraint(jamforbar_kvall, kvall_shifts, roll, 'kvall', MAX_SPREAD)
+
+            # --- Nattpass: filtrera bort de med passrestriktion ---
+            if natt_shifts:
+                jamforbar_natt = [
+                    p for p in roll_personal
+                    if 'natt' not in (p.exclude_pass_typer or [])
+                    and p.anstallning >= 75
+                ]
+                self._add_spread_constraint(jamforbar_natt, natt_shifts, roll, 'natt', MAX_SPREAD)
+
+    def _add_spread_constraint(self, personal_group, target_shifts, roll, label, max_spread):
+        """Lägger till hård constraint: max spread mellan jämförbara personer."""
+        if len(personal_group) < 2:
+            return
+
+        count_vars = []
+        for person in personal_group:
+            v = self.model.NewIntVar(
+                0, len(target_shifts), f'hard_{label}_{roll}_{person.namn}')
+            self.model.Add(v == sum(
+                self.assignments[(person.namn, s)] for s in target_shifts
+            ))
+            count_vars.append(v)
+
+        spread_max = self.model.NewIntVar(
+            0, len(target_shifts), f'hard_{label}_{roll}_max')
+        spread_min = self.model.NewIntVar(
+            0, len(target_shifts), f'hard_{label}_{roll}_min')
+        self.model.AddMaxEquality(spread_max, count_vars)
+        self.model.AddMinEquality(spread_min, count_vars)
+        self.model.Add(spread_max - spread_min <= max_spread)
 
     # Mjuka mål (jämn helg/kväll-natt-fördelning) hanteras nu direkt
     # i optimizer.py:_definiera_objektfunktion() som del av objective function.
