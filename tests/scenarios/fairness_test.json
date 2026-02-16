@@ -1,0 +1,48 @@
+{
+  "name": "fairness_test",
+  "description": "Fairness-test: alla i samma roll har identiska forutsattningar (100%, man-son, ingen franvaro). Om solvern ger ojamn fordelning ar det en bugg.",
+  "period": {
+    "start": "2026-03-01",
+    "end": "2026-03-31"
+  },
+  "personal": [
+    {"namn": "Lakare A", "roll": "lakare", "anstallning": 100, "tillganglighet": ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"], "franvaro": []},
+    {"namn": "Lakare B", "roll": "lakare", "anstallning": 100, "tillganglighet": ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"], "franvaro": []},
+
+    {"namn": "SSK A", "roll": "sjukskoterska", "anstallning": 100, "tillganglighet": ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"], "franvaro": []},
+    {"namn": "SSK B", "roll": "sjukskoterska", "anstallning": 100, "tillganglighet": ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"], "franvaro": []},
+    {"namn": "SSK C", "roll": "sjukskoterska", "anstallning": 100, "tillganglighet": ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"], "franvaro": []},
+    {"namn": "SSK D", "roll": "sjukskoterska", "anstallning": 100, "tillganglighet": ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"], "franvaro": []},
+    {"namn": "SSK E", "roll": "sjukskoterska", "anstallning": 100, "tillganglighet": ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"], "franvaro": []},
+    {"namn": "SSK F", "roll": "sjukskoterska", "anstallning": 100, "tillganglighet": ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"], "franvaro": []},
+    {"namn": "SSK G", "roll": "sjukskoterska", "anstallning": 100, "tillganglighet": ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"], "franvaro": []},
+
+    {"namn": "USK A", "roll": "underskoterska", "anstallning": 100, "tillganglighet": ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"], "franvaro": []},
+    {"namn": "USK B", "roll": "underskoterska", "anstallning": 100, "tillganglighet": ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"], "franvaro": []},
+    {"namn": "USK C", "roll": "underskoterska", "anstallning": 100, "tillganglighet": ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"], "franvaro": []},
+    {"namn": "USK D", "roll": "underskoterska", "anstallning": 100, "tillganglighet": ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"], "franvaro": []},
+    {"namn": "USK E", "roll": "underskoterska", "anstallning": 100, "tillganglighet": ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"], "franvaro": []},
+    {"namn": "USK F", "roll": "underskoterska", "anstallning": 100, "tillganglighet": ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"], "franvaro": []},
+    {"namn": "USK G", "roll": "underskoterska", "anstallning": 100, "tillganglighet": ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"], "franvaro": []},
+    {"namn": "USK H", "roll": "underskoterska", "anstallning": 100, "tillganglighet": ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"], "franvaro": []},
+    {"namn": "USK I", "roll": "underskoterska", "anstallning": 100, "tillganglighet": ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"], "franvaro": []},
+    {"namn": "USK J", "roll": "underskoterska", "anstallning": 100, "tillganglighet": ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"], "franvaro": []}
+  ],
+  "bemanningsbehov": {
+    "vardag": {
+      "dag":   {"lakare": 1, "sjukskoterska": 2, "underskoterska": 3},
+      "kvall": {"lakare": 0, "sjukskoterska": 1, "underskoterska": 2},
+      "natt":  {"lakare": 0, "sjukskoterska": 1, "underskoterska": 1}
+    },
+    "helg": {
+      "dag":   {"lakare": 1, "sjukskoterska": 1, "underskoterska": 2},
+      "kvall": {"lakare": 0, "sjukskoterska": 1, "underskoterska": 2},
+      "natt":  {"lakare": 0, "sjukskoterska": 1, "underskoterska": 1}
+    }
+  },
+  "expected_outcome": {
+    "min_coverage": 100,
+    "max_overtime": 0,
+    "min_quality": 90
+  }
+}
