@@ -73,7 +73,24 @@ class SchemaOptimizer:
         """
         penalty_terms = []
 
-        # --- Mål 1: Minimera överbemanning ---
+        # --- Mål 1a: Minimera undermanning (mjukt kompetenskrav) ---
+        # Vikt 100 — högsta prioritet. Fyll bemanningskrav i första hand,
+        # men om en roll inte räcker till ska övriga roller fortfarande schemaläggas.
+        for shift in self.shifts:
+            for roll, antal_krav in shift.kompetenskrav.items():
+                personer_med_roll = [
+                    self.assignments[(p.namn, shift)]
+                    for p in self.personal
+                    if p.roll == roll
+                ]
+                if personer_med_roll:
+                    under = self.model.NewIntVar(
+                        0, antal_krav,
+                        f'under_{shift.datum}_{shift.pass_typ.value}_{roll}')
+                    self.model.Add(under >= antal_krav - sum(personer_med_roll))
+                    penalty_terms.append(under * 100)
+
+        # --- Mål 1b: Minimera överbemanning ---
         # Vikt 3 (sänkt från 10) — det finns ~90 shifts × roller = många termer
         # som annars dominerar och tränger ut rättvisemålen
         for shift in self.shifts:

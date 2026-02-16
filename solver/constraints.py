@@ -173,22 +173,16 @@ class ConstraintBuilder:
 
     def constraint_kompetenskrav(self):
         """
-        Varje shift måste ha rätt antal personer med rätt kompetens
-        
+        Kompetenskrav hanteras nu som mjuk constraint i optimizer.py.
+
+        Anledning: Om t.ex. USK inte räcker till ska solvern ändå generera
+        schema för SSK och läkare, och rapportera undermanning för USK.
+        Tidigare kraschade hela solvern (INFEASIBLE) om en enda roll
+        inte kunde fyllas.
+
         Källa: Socialstyrelsen SOSFS 2012:11, Patientsäkerhetslagen
-        Exempel: Dagpass kan kräva 1 läkare, 3 sjuksköterskor, 5 undersköterskor
         """
-        for shift in self.shifts:
-            for roll, antal_krav in shift.kompetenskrav.items():
-                # Hitta alla personer med denna roll
-                personer_med_roll = [
-                    self.assignments[(p.namn, shift)]
-                    for p in self.personal
-                    if p.roll == roll
-                ]
-                if personer_med_roll:
-                    # Minst antal personer med rätt roll (tillåter undermanning om nödvändigt)
-                    self.model.Add(sum(personer_med_roll) >= antal_krav)
+        pass  # Moved to optimizer.py as soft constraint with high penalty
 
     def constraint_tillganglighet(self):
         """
