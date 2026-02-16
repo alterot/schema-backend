@@ -30,7 +30,7 @@ class SchemaRad:
     datum: date
     pass_typ: PassTyp
     avdelning: str
-    personal: List[str]  # Lista med personnamn
+    personal: List[int]  # Lista med person-ID:n
     duration_hours: int = 8  # Passlängd i timmar
 
     def to_dict(self) -> Dict:
@@ -70,7 +70,7 @@ class Schedule:
         """Beräknar statistik för schemat"""
         from collections import defaultdict
 
-        # Räkna pass per person
+        # Räkna pass per person (keyed by ID)
         pass_per_person = defaultdict(lambda: {
             'totalt': 0,
             'dag': 0,
@@ -80,13 +80,13 @@ class Schedule:
         })
 
         for rad in self.rader:
-            for person_namn in rad.personal:
-                pass_per_person[person_namn]['totalt'] += 1
-                pass_per_person[person_namn][rad.pass_typ.value] += 1
+            for person_id in rad.personal:
+                pass_per_person[person_id]['totalt'] += 1
+                pass_per_person[person_id][rad.pass_typ.value] += 1
 
                 # Räkna helgpass
                 if rad.datum.weekday() >= 5:  # Lördag eller söndag
-                    pass_per_person[person_namn]['helger'] += 1
+                    pass_per_person[person_id]['helger'] += 1
 
         self.statistik = {
             'totalt_antal_pass': len(self.rader),

@@ -6,27 +6,27 @@
     "end": "2026-03-31"
   },
   "personal": [
-    {"namn": "Lakare A", "roll": "lakare", "anstallning": 100, "tillganglighet": ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"], "franvaro": []},
-    {"namn": "Lakare B", "roll": "lakare", "anstallning": 100, "tillganglighet": ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"], "franvaro": []},
+    {"id": 1, "namn": "Lakare A", "roll": "lakare", "anstallning": 100, "tillganglighet": ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"], "franvaro": []},
+    {"id": 2, "namn": "Lakare B", "roll": "lakare", "anstallning": 100, "tillganglighet": ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"], "franvaro": []},
 
-    {"namn": "SSK A", "roll": "sjukskoterska", "anstallning": 100, "tillganglighet": ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"], "franvaro": []},
-    {"namn": "SSK B", "roll": "sjukskoterska", "anstallning": 100, "tillganglighet": ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"], "franvaro": []},
-    {"namn": "SSK C", "roll": "sjukskoterska", "anstallning": 100, "tillganglighet": ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"], "franvaro": []},
-    {"namn": "SSK D", "roll": "sjukskoterska", "anstallning": 100, "tillganglighet": ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"], "franvaro": []},
-    {"namn": "SSK E", "roll": "sjukskoterska", "anstallning": 100, "tillganglighet": ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"], "franvaro": []},
-    {"namn": "SSK F", "roll": "sjukskoterska", "anstallning": 100, "tillganglighet": ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"], "franvaro": []},
-    {"namn": "SSK G", "roll": "sjukskoterska", "anstallning": 100, "tillganglighet": ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"], "franvaro": []},
+    {"id": 3, "namn": "SSK A", "roll": "sjukskoterska", "anstallning": 100, "tillganglighet": ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"], "franvaro": []},
+    {"id": 4, "namn": "SSK B", "roll": "sjukskoterska", "anstallning": 100, "tillganglighet": ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"], "franvaro": []},
+    {"id": 5, "namn": "SSK C", "roll": "sjukskoterska", "anstallning": 100, "tillganglighet": ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"], "franvaro": []},
+    {"id": 6, "namn": "SSK D", "roll": "sjukskoterska", "anstallning": 100, "tillganglighet": ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"], "franvaro": []},
+    {"id": 7, "namn": "SSK E", "roll": "sjukskoterska", "anstallning": 100, "tillganglighet": ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"], "franvaro": []},
+    {"id": 8, "namn": "SSK F", "roll": "sjukskoterska", "anstallning": 100, "tillganglighet": ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"], "franvaro": []},
+    {"id": 9, "namn": "SSK G", "roll": "sjukskoterska", "anstallning": 100, "tillganglighet": ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"], "franvaro": []},
 
-    {"namn": "USK A", "roll": "underskoterska", "anstallning": 100, "tillganglighet": ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"], "franvaro": []},
-    {"namn": "USK B", "roll": "underskoterska", "anstallning": 100, "tillganglighet": ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"], "franvaro": []},
-    {"namn": "USK C", "roll": "underskoterska", "anstallning": 100, "tillganglighet": ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"], "franvaro": []},
-    {"namn": "USK D", "roll": "underskoterska", "anstallning": 100, "tillganglighet": ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"], "franvaro": []},
-    {"namn": "USK E", "roll": "underskoterska", "anstallning": 100, "tillganglighet": ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"], "franvaro": []},
-    {"namn": "USK F", "roll": "underskoterska", "anstallning": 100, "tillganglighet": ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"], "franvaro": []},
-    {"namn": "USK G", "roll": "underskoterska", "anstallning": 100, "tillganglighet": ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"], "franvaro": []},
-    {"namn": "USK H", "roll": "underskoterska", "anstallning": 100, "tillganglighet": ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"], "franvaro": []},
-    {"namn": "USK I", "roll": "underskoterska", "anstallning": 100, "tillganglighet": ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"], "franvaro": []},
-    {"namn": "USK J", "roll": "underskoterska", "anstallning": 100, "tillganglighet": ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"], "franvaro": []}
+    {"id": 10, "namn": "USK A", "roll": "underskoterska", "anstallning": 100, "tillganglighet": ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"], "franvaro": []},
+    {"id": 11, "namn": "USK B", "roll": "underskoterska", "anstallning": 100, "tillganglighet": ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"], "franvaro": []},
+    {"id": 12, "namn": "USK C", "roll": "underskoterska", "anstallning": 100, "tillganglighet": ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"], "franvaro": []},
+    {"id": 13, "namn": "USK D", "roll": "underskoterska", "anstallning": 100, "tillganglighet": ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"], "franvaro": []},
+    {"id": 14, "namn": "USK E", "roll": "underskoterska", "anstallning": 100, "tillganglighet": ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"], "franvaro": []},
+    {"id": 15, "namn": "USK F", "roll": "underskoterska", "anstallning": 100, "tillganglighet": ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"], "franvaro": []},
+    {"id": 16, "namn": "USK G", "roll": "underskoterska", "anstallning": 100, "tillganglighet": ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"], "franvaro": []},
+    {"id": 17, "namn": "USK H", "roll": "underskoterska", "anstallning": 100, "tillganglighet": ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"], "franvaro": []},
+    {"id": 18, "namn": "USK I", "roll": "underskoterska", "anstallning": 100, "tillganglighet": ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"], "franvaro": []},
+    {"id": 19, "namn": "USK J", "roll": "underskoterska", "anstallning": 100, "tillganglighet": ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"], "franvaro": []}
   ],
   "bemanningsbehov": {
     "vardag": {

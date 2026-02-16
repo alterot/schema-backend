@@ -27,7 +27,7 @@ class SchemaOptimizer:
         self.personal = personal
         self.shifts = shifts
         self.model = cp_model.CpModel()
-        self.assignments = {}  # (person_namn, shift) -> BoolVar
+        self.assignments = {}  # (person_id, shift) -> BoolVar
         self.solver = cp_model.CpSolver()
 
         # Konfiguration
@@ -69,7 +69,7 @@ class SchemaOptimizer:
             for shift in self.shifts:
                 # Skapa en boolean variabel: 1 = person arbetar detta shift, 0 = inte
                 var_name = f'{person.namn}_{shift.datum}_{shift.pass_typ.value}'
-                self.assignments[(person.namn, shift)] = self.model.NewBoolVar(var_name)
+                self.assignments[(person.id, shift)] = self.model.NewBoolVar(var_name)
 
     def _definiera_objektfunktion(self):
         """
@@ -91,7 +91,7 @@ class SchemaOptimizer:
         for shift in self.shifts:
             for roll, antal_krav in shift.kompetenskrav.items():
                 personer_med_roll = [
-                    self.assignments[(p.namn, shift)]
+                    self.assignments[(p.id, shift)]
                     for p in self.personal
                     if p.roll == roll
                 ]
@@ -108,7 +108,7 @@ class SchemaOptimizer:
         for shift in self.shifts:
             for roll, antal_krav in shift.kompetenskrav.items():
                 personer_med_roll = [
-                    self.assignments[(p.namn, shift)]
+                    self.assignments[(p.id, shift)]
                     for p in self.personal
                     if p.roll == roll
                 ]
@@ -130,7 +130,7 @@ class SchemaOptimizer:
             for person in roll_personal:
                 t = self.model.NewIntVar(0, len(self.shifts), f'total_{roll}_{person.namn}')
                 self.model.Add(t == sum(
-                    self.assignments[(person.namn, s)] for s in self.shifts
+                    self.assignments[(person.id, s)] for s in self.shifts
                 ))
                 total_vars.append(t)
 
@@ -160,7 +160,7 @@ class SchemaOptimizer:
                 for person in roll_personal:
                     v = self.model.NewIntVar(0, len(shifts), f'{label}_{roll}_{person.namn}')
                     self.model.Add(v == sum(
-                        self.assignments[(person.namn, s)] for s in shifts
+                        self.assignments[(person.id, s)] for s in shifts
                     ))
                     spread_vars.append(v)
 
@@ -182,7 +182,7 @@ class SchemaOptimizer:
                 if all((datum_4[j + 1] - datum_4[j]).days == 1 for j in range(3)):
                     # Kvällsstreak: alla 4 dagar kväll?
                     kvall_4 = [
-                        self.assignments[(person.namn, s)]
+                        self.assignments[(person.id, s)]
                         for s in self.shifts
                         if s.datum in datum_4 and s.pass_typ == PassTyp.KVALL
                     ]
@@ -195,7 +195,7 @@ class SchemaOptimizer:
 
                     # Nattstreak: alla 4 dagar natt?
                     natt_4 = [
-                        self.assignments[(person.namn, s)]
+                        self.assignments[(person.id, s)]
                         for s in self.shifts
                         if s.datum in datum_4 and s.pass_typ == PassTyp.NATT
                     ]
@@ -223,12 +223,12 @@ class SchemaOptimizer:
                         bad_rot = self.model.NewBoolVar(
                             f'bad_rot_{person.namn}_{dag1}')
                         self.model.Add(
-                            self.assignments[(person.namn, natt_s)] +
-                            self.assignments[(person.namn, dag_s)] >= 2
+                            self.assignments[(person.id, natt_s)] +
+                            self.assignments[(person.id, dag_s)] >= 2
                         ).OnlyEnforceIf(bad_rot)
                         self.model.Add(
-                            self.assignments[(person.namn, natt_s)] +
-                            self.assignments[(person.namn, dag_s)] < 2
+                            self.assignments[(person.id, natt_s)] +
+                            self.assignments[(person.id, dag_s)] < 2
                         ).OnlyEnforceIf(bad_rot.Not())
                         penalty_terms.append(bad_rot * 3)
 
@@ -274,9 +274,9 @@ class SchemaOptimizer:
         # Gruppera per shift
         shifts_med_personal = defaultdict(list)
 
-        for (person_namn, shift), var in self.assignments.items():
+        for (person_id, shift), var in self.assignments.items():
             if self.solver.Value(var) == 1:
-                shifts_med_personal[shift].append(person_namn)
+                shifts_med_personal[shift].append(person_id)
 
         # Skapa schemarader
         for shift in self.shifts:
@@ -307,9 +307,11 @@ class SchemaOptimizer:
             if matching_shift:
                 # Räkna antal per roll
                 personal_per_roll = defaultdict(int)
-                for person_namn in rad.personal:
-                    person = next(p for p in self.personal if p.namn == person_namn)
-                    personal_per_roll[person.roll] += 1
+                id_lookup = {p.id: p for p in self.personal}
+                for person_id in rad.personal:
+                    person = id_lookup.get(person_id)
+                    if person:
+                        personal_per_roll[person.roll] += 1
 
                 # Jämför med krav
                 for roll, krav in matching_shift.kompetenskrav.items():
@@ -336,21 +338,23 @@ class SchemaOptimizer:
 
     def _kontrollera_fordelning(self, schedule: Schedule):
         """Kontrollerar om pass är jämnt fördelade, per roll och kategori."""
-        # Bygg roll-lookup och person-lookup
-        roll_for = {p.namn: p.roll for p in self.personal}
-        person_for = {p.namn: p for p in self.personal}
+        # Bygg ID-baserade lookups
+        id_lookup = {p.id: p for p in self.personal}
 
-        # Samla per (roll, kategori)
-        counts = defaultdict(lambda: defaultdict(int))  # (roll, kategori) -> {namn: antal}
+        # Samla per (roll, kategori) — keyed by person ID
+        counts = defaultdict(lambda: defaultdict(int))  # (roll, kategori) -> {person_id: antal}
         for rad in schedule.rader:
-            for namn in rad.personal:
-                roll = roll_for.get(namn, 'okänd')
+            for person_id in rad.personal:
+                person = id_lookup.get(person_id)
+                if not person:
+                    continue
+                roll = person.roll
                 if rad.datum.weekday() >= 5:
-                    counts[(roll, 'helg')][namn] += 1
+                    counts[(roll, 'helg')][person_id] += 1
                 if rad.pass_typ == PassTyp.KVALL:
-                    counts[(roll, 'kväll')][namn] += 1
+                    counts[(roll, 'kväll')][person_id] += 1
                 elif rad.pass_typ == PassTyp.NATT:
-                    counts[(roll, 'natt')][namn] += 1
+                    counts[(roll, 'natt')][person_id] += 1
 
         dag_namn = {'Mon': 'mån', 'Tue': 'tis', 'Wed': 'ons', 'Thu': 'tor', 'Fri': 'fre', 'Sat': 'lör', 'Sun': 'sön'}
 
@@ -360,27 +364,30 @@ class SchemaOptimizer:
             max_v = max(data.values())
             min_v = min(data.values())
             if max_v - min_v > 2:
-                max_p = max(data, key=data.get)
-                min_p = min(data, key=data.get)
+                max_pid = max(data, key=data.get)
+                min_pid = min(data, key=data.get)
+                max_namn = id_lookup[max_pid].namn
+                min_namn = id_lookup[min_pid].namn
 
                 # Bygg förklaring med faktisk personaldata
-                forklaring = self._forklara_obalans(max_p, min_p, label, person_for, dag_namn)
+                forklaring = self._forklara_obalans(max_pid, min_pid, label, id_lookup, dag_namn)
 
                 schedule.lagg_till_konflikt(Konflikt(
                     datum=None,
                     pass_typ=None,
                     typ=f'obalanserad_{label}fordelning',
-                    beskrivning=f'Ojämn {label}fördelning bland {_roll(roll)}: {max_p} {max_v} {label}pass, {min_p} {min_v}. {forklaring}',
+                    beskrivning=f'Ojämn {label}fördelning bland {_roll(roll)}: {max_namn} {max_v} {label}pass, {min_namn} {min_v}. {forklaring}',
                     allvarlighetsgrad=1
                 ))
 
-    def _forklara_obalans(self, max_p, min_p, label, person_for, dag_namn):
+    def _forklara_obalans(self, max_pid, min_pid, label, id_lookup, dag_namn):
         """Bygger en klartext-förklaring av varför fördelningen är ojämn."""
         delar = []
-        for namn in [max_p, min_p]:
-            person = person_for.get(namn)
+        for pid in [max_pid, min_pid]:
+            person = id_lookup.get(pid)
             if not person:
                 continue
+            namn = person.namn
             dagar = person.tillganglighet or []
             dagar_sv = [dag_namn.get(d, d) for d in dagar]
             helg_dagar = sum(1 for d in dagar if d in ('Sat', 'Sun'))

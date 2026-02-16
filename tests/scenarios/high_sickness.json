@@ -7,6 +7,7 @@
   },
   "personal": [
     {
+      "id": 1,
       "namn": "Anna Ssk",
       "roll": "sjukskoterska",
       "anstallning": 100,
@@ -16,6 +17,7 @@
       ]
     },
     {
+      "id": 2,
       "namn": "Bengt Ssk",
       "roll": "sjukskoterska",
       "anstallning": 100,
@@ -23,6 +25,7 @@
       "franvaro": []
     },
     {
+      "id": 3,
       "namn": "Cecilia Ssk",
       "roll": "sjukskoterska",
       "anstallning": 100,
@@ -30,6 +33,7 @@
       "franvaro": []
     },
     {
+      "id": 4,
       "namn": "Diana Ssk",
       "roll": "sjukskoterska",
       "anstallning": 100,
@@ -37,6 +41,7 @@
       "franvaro": []
     },
     {
+      "id": 5,
       "namn": "Erik Ssk",
       "roll": "sjukskoterska",
       "anstallning": 100,
@@ -44,6 +49,7 @@
       "franvaro": []
     },
     {
+      "id": 6,
       "namn": "David Usk",
       "roll": "underskoterska",
       "anstallning": 100,
@@ -53,6 +59,7 @@
       ]
     },
     {
+      "id": 7,
       "namn": "Eva Usk",
       "roll": "underskoterska",
       "anstallning": 100,
@@ -60,6 +67,7 @@
       "franvaro": []
     },
     {
+      "id": 8,
       "namn": "Fredrik Usk",
       "roll": "underskoterska",
       "anstallning": 100,
@@ -67,6 +75,7 @@
       "franvaro": []
     },
     {
+      "id": 9,
       "namn": "Gustav Usk",
       "roll": "underskoterska",
       "anstallning": 100,
@@ -74,6 +83,7 @@
       "franvaro": []
     },
     {
+      "id": 10,
       "namn": "Helena Usk",
       "roll": "underskoterska",
       "anstallning": 100,

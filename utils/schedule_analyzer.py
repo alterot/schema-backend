@@ -23,13 +23,15 @@ def find_conflicts(schema_rader: List, shifts: List, personal: List, bemanningsb
     """
     conflicts = []
 
-    # Build lookup: (datum, pass_typ) -> list of assigned names
+    # Build lookup: (datum, pass_typ) -> list of assigned person IDs
     assignment_map = defaultdict(list)
     for rad in schema_rader:
         key = (rad.datum.isoformat(), rad.pass_typ.value)
         assignment_map[key] = rad.personal
 
     # Check each shift requirement for understaffing
+    roll_lookup = {p.id: p.roll for p in personal}
+    namn_lookup = {p.id: p.namn for p in personal}
     for shift in shifts:
         datum_str = shift.datum.isoformat()
         pass_str = shift.pass_typ.value
@@ -37,8 +39,7 @@ def find_conflicts(schema_rader: List, shifts: List, personal: List, bemanningsb
 
         for roll, krav in shift.kompetenskrav.items():
             # Count assigned with this role
-            roll_lookup = {p.namn: p.roll for p in personal}
-            count = sum(1 for name in assigned if roll_lookup.get(name, '') == roll)
+            count = sum(1 for pid in assigned if roll_lookup.get(pid, '') == roll)
 
             if count < krav:
                 is_weekend = shift.datum.weekday() >= 5
@@ -53,16 +54,17 @@ def find_conflicts(schema_rader: List, shifts: List, personal: List, bemanningsb
                     'saknas': krav - count,
                 })
 
-    # Check for overtime per person
+    # Check for overtime per person (keyed by person ID)
     pass_per_person = defaultdict(int)
     for rad in schema_rader:
-        for namn in rad.personal:
-            pass_per_person[namn] += 1
+        for person_id in rad.personal:
+            pass_per_person[person_id] += 1
 
-    max_pass_lookup = {p.namn: p.max_arbetspass_per_manad for p in personal}
-    for namn, antal in pass_per_person.items():
-        max_pass = max_pass_lookup.get(namn, 20)
+    max_pass_lookup = {p.id: p.max_arbetspass_per_manad for p in personal}
+    for person_id, antal in pass_per_person.items():
+        max_pass = max_pass_lookup.get(person_id, 20)
         if antal > max_pass:
+            namn = namn_lookup.get(person_id, str(person_id))
             conflicts.append({
                 'typ': 'overtid',
                 'datum': None,
@@ -91,22 +93,22 @@ def suggest_solutions(conflicts: List[Dict], personal: List, schema_rader: List)
     proposals = []
     proposal_id = 1
 
-    # Count shifts per person to find who has room
+    # Count shifts per person to find who has room (keyed by person ID)
     pass_per_person = defaultdict(int)
     for rad in schema_rader:
-        for namn in rad.personal:
-            pass_per_person[namn] += 1
+        for person_id in rad.personal:
+            pass_per_person[person_id] += 1
 
-    max_pass_lookup = {p.namn: p.max_arbetspass_per_manad for p in personal}
-    roll_lookup = {p.namn: p.roll for p in personal}
+    max_pass_lookup = {p.id: p.max_arbetspass_per_manad for p in personal}
+    roll_lookup = {p.id: p.roll for p in personal}
 
     # Find people with capacity (fewer shifts than max)
     available_capacity = {}
     for p in personal:
-        used = pass_per_person.get(p.namn, 0)
+        used = pass_per_person.get(p.id, 0)
         remaining = p.max_arbetspass_per_manad - used
         if remaining > 0:
-            available_capacity[p.namn] = {
+            available_capacity[p.id] = {
                 'remaining': remaining,
                 'roll': p.roll,
                 'namn': p.namn,

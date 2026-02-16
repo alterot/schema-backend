@@ -115,7 +115,7 @@ class ConstraintBuilder:
         self.assignments = assignments  # assignments[(person, shift)] = BoolVar
 
         # Bygg hjälpstrukturer
-        self.person_index = {p.namn: p for p in personal}
+        self.person_index = {p.id: p for p in personal}
         self.shifts_by_date = self._group_shifts_by_date()
         self.shifts_by_date_and_person = self._create_shift_dict()
 
@@ -132,11 +132,11 @@ class ConstraintBuilder:
         """Skapar dict för snabb uppslagning av shifts per person och datum"""
         result = {}
         for person in self.personal:
-            result[person.namn] = {}
+            result[person.id] = {}
             for shift in self.shifts:
-                if shift.datum not in result[person.namn]:
-                    result[person.namn][shift.datum] = []
-                result[person.namn][shift.datum].append(shift)
+                if shift.datum not in result[person.id]:
+                    result[person.id][shift.datum] = []
+                result[person.id][shift.datum].append(shift)
         return result
 
     def add_harda_constraints(self):
@@ -164,7 +164,7 @@ class ConstraintBuilder:
         for person in self.personal:
             for datum in self.shifts_by_date.keys():
                 shifts_denna_dag = [
-                    self.assignments[(person.namn, shift)]
+                    self.assignments[(person.id, shift)]
                     for shift in self.shifts
                     if shift.datum == datum
                 ]
@@ -195,7 +195,7 @@ class ConstraintBuilder:
             for shift in self.shifts:
                 if not person.ar_tillganglig(shift.datum):
                     # Tvinga denna assignment till 0 (ej tilldelad)
-                    self.model.Add(self.assignments[(person.namn, shift)] == 0)
+                    self.model.Add(self.assignments[(person.id, shift)] == 0)
 
     def constraint_franvaro(self):
         """
@@ -238,8 +238,8 @@ class ConstraintBuilder:
                             if s1.pass_typ.bryter_vilotid(s2.pass_typ):
                                 # Dessa två pass kan inte båda tilldelas samma person
                                 self.model.Add(
-                                    self.assignments[(person.namn, s1)] +
-                                    self.assignments[(person.namn, s2)] <= 1
+                                    self.assignments[(person.id, s1)] +
+                                    self.assignments[(person.id, s2)] <= 1
                                 )
 
     def constraint_veckovila(self):
@@ -278,14 +278,14 @@ class ConstraintBuilder:
                     for datum in vecka_datum:
                         # Hitta alla pass för denna dag
                         shifts_denna_dag = [
-                            self.assignments[(person.namn, shift)]
+                            self.assignments[(person.id, shift)]
                             for shift in self.shifts
                             if shift.datum == datum
                         ]
                         
                         if shifts_denna_dag:
                             # Skapa variabel: 1 om dagen är helt ledig, 0 annars
-                            dag_ledig = self.model.NewBoolVar(f'ledig_{person.namn}_{datum}')
+                            dag_ledig = self.model.NewBoolVar(f'ledig_{person.id}_{datum}')
                             
                             # dag_ledig = 1 om INGA pass jobbas denna dag
                             # dvs sum(shifts_denna_dag) == 0
@@ -326,7 +326,7 @@ class ConstraintBuilder:
                 if ar_konsekutiv:
                     # Hitta alla pass under dessa 6 dagar
                     alla_pass = [
-                        self.assignments[(person.namn, shift)]
+                        self.assignments[(person.id, shift)]
                         for shift in self.shifts
                         if shift.datum in datum_sekvens
                     ]
@@ -360,7 +360,7 @@ class ConstraintBuilder:
         for person in self.personal:
             for manad_key, shifts_i_manad in shifts_per_manad.items():
                 timmar_terms = [
-                    self.assignments[(person.namn, shift)] * shift.duration_hours
+                    self.assignments[(person.id, shift)] * shift.duration_hours
                     for shift in shifts_i_manad
                 ]
                 if timmar_terms:
@@ -397,7 +397,7 @@ class ConstraintBuilder:
         for person in self.personal:
             for ar_key, shifts_i_ar in shifts_per_ar.items():
                 timmar_terms = [
-                    self.assignments[(person.namn, shift)] * shift.duration_hours
+                    self.assignments[(person.id, shift)] * shift.duration_hours
                     for shift in shifts_i_ar
                 ]
 
@@ -418,7 +418,7 @@ class ConstraintBuilder:
                 continue
             for shift in self.shifts:
                 if shift.pass_typ.value in person.exclude_pass_typer:
-                    self.model.Add(self.assignments[(person.namn, shift)] == 0)
+                    self.model.Add(self.assignments[(person.id, shift)] == 0)
 
     def constraint_lasta_pass(self):
         """
@@ -437,7 +437,7 @@ class ConstraintBuilder:
                     None
                 )
                 if matching_shift:
-                    self.model.Add(self.assignments[(person.namn, matching_shift)] == 1)
+                    self.model.Add(self.assignments[(person.id, matching_shift)] == 1)
 
     def constraint_jamn_fordelning(self):
         """
@@ -464,7 +464,7 @@ class ConstraintBuilder:
         for p in self.personal:
             for f in p.franvaro:
                 if any(f.start <= d <= f.slut for d in alla_datum):
-                    har_franvaro.add(p.namn)
+                    har_franvaro.add(p.id)
                     break
 
         roller = set(p.roll for p in self.personal)
@@ -480,7 +480,7 @@ class ConstraintBuilder:
                     p for p in roll_personal
                     if sum(1 for d in p.tillganglighet if d in ('Sat', 'Sun')) == 2
                     and p.anstallning >= 75
-                    and p.namn not in har_franvaro
+                    and p.id not in har_franvaro
                 ]
                 self._add_spread_constraint(jamforbar_helg, helg_shifts, roll, 'helg', MAX_SPREAD)
 
@@ -490,7 +490,7 @@ class ConstraintBuilder:
                     p for p in roll_personal
                     if 'kväll' not in (p.exclude_pass_typer or [])
                     and p.anstallning >= 75
-                    and p.namn not in har_franvaro
+                    and p.id not in har_franvaro
                 ]
                 self._add_spread_constraint(jamforbar_kvall, kvall_shifts, roll, 'kvall', MAX_SPREAD)
 
@@ -500,7 +500,7 @@ class ConstraintBuilder:
                     p for p in roll_personal
                     if 'natt' not in (p.exclude_pass_typer or [])
                     and p.anstallning >= 75
-                    and p.namn not in har_franvaro
+                    and p.id not in har_franvaro
                 ]
                 self._add_spread_constraint(jamforbar_natt, natt_shifts, roll, 'natt', MAX_SPREAD)
 
@@ -512,9 +512,9 @@ class ConstraintBuilder:
         count_vars = []
         for person in personal_group:
             v = self.model.NewIntVar(
-                0, len(target_shifts), f'hard_{label}_{roll}_{person.namn}')
+                0, len(target_shifts), f'hard_{label}_{roll}_{person.id}')
             self.model.Add(v == sum(
-                self.assignments[(person.namn, s)] for s in target_shifts
+                self.assignments[(person.id, s)] for s in target_shifts
             ))
             count_vars.append(v)
 

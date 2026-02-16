@@ -85,7 +85,9 @@ def _generate_schedule_for_period(period: str, override_personal=None, override_
 
             # Action "add": lägg till ny person (vikarie)
             if mod.get('action') == 'add':
+                new_id = max((p.id for p in personal), default=0) + 1
                 new_person_data = {
+                    'id': new_id,
                     'namn': namn,
                     'roll': mod.get('roll', 'underskoterska'),
                     'anstallning': mod.get('anstallning', 100),
@@ -275,6 +277,10 @@ def generate_schedule():
         # Steg 6: Returnera resultat med metrics
         result = schedule.to_dict()
         result['metrics'] = metrics
+        result['personal_lookup'] = {
+            str(p.id): {'namn': p.namn, 'roll': p.roll}
+            for p in personal
+        }
         return jsonify(result), 200
 
     except ValidationError as e:
@@ -383,6 +389,10 @@ def generate_realistic_schedule():
             'end': end_date.isoformat()
         }
         result['avdelning'] = avdelning_info
+        result['personal_lookup'] = {
+            str(p.id): {'namn': p.namn, 'roll': p.roll}
+            for p in personal
+        }
 
         return jsonify(result), 200
 
@@ -557,6 +567,12 @@ def get_schedule(period: str):
         # Deduplicate (3 shifts per day)
         result['helgdagar'] = sorted(set(helgdagar))
 
+        # Include personal_lookup so frontend can map IDs to names
+        result['personal_lookup'] = {
+            str(p.id): {'namn': p.namn, 'roll': p.roll}
+            for p in personal
+        }
+
         # Include franvaro periods so frontend can render per-day absence
         franvaro_perioder = {}
         for p in personal:
@@ -640,6 +656,7 @@ def export_schedule_excel(period: str):
         schema_rows = saved.get('schema', [])
         konflikter = saved.get('konflikter', [])
         metrics = saved.get('metrics', {})
+        personal_lookup = saved.get('personal_lookup', {})
 
         # Parse period
         year, month = period.split('-')
@@ -662,6 +679,11 @@ def export_schedule_excel(period: str):
 
         weekday_names = ['Mon', 'Tis', 'Ons', 'Tor', 'Fre', 'Lor', 'Son']
 
+        # Helper: resolve person ID to name
+        def _resolve_name(pid):
+            entry = personal_lookup.get(str(pid))
+            return entry['namn'] if entry else str(pid)
+
         # Group schema by day
         day_map = {}
         for row in schema_rows:
@@ -670,7 +692,7 @@ def export_schedule_excel(period: str):
                 day_map[datum] = {'dag': [], 'kvall': [], 'natt': []}
             pass_key = 'kvall' if row.get('pass') == 'kväll' else row.get('pass', '')
             if pass_key in day_map[datum]:
-                day_map[datum][pass_key] = row.get('personal', [])
+                day_map[datum][pass_key] = [_resolve_name(pid) for pid in row.get('personal', [])]
 
         # Conflict dates for highlighting
         conflict_dates = set(k.get('datum') for k in konflikter if k.get('datum'))
@@ -737,12 +759,13 @@ def export_schedule_excel(period: str):
         # ── Sheet 2: Per person ──
         ws2 = wb.create_sheet('Per person')
 
-        # Build person-shift map
+        # Build person-shift map (resolve IDs to names for display)
         person_shifts = {}
         for row in schema_rows:
             datum = row['datum']
             pass_key = 'kvall' if row.get('pass') == 'kväll' else row.get('pass', '')
-            for name in row.get('personal', []):
+            for pid in row.get('personal', []):
+                name = _resolve_name(pid)
                 if name not in person_shifts:
                     person_shifts[name] = {}
                 person_shifts[name][datum] = pass_key

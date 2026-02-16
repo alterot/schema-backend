@@ -27,6 +27,7 @@ class Franvaro:
 @dataclass
 class Person:
     """Representerar en anställd på avdelningen"""
+    id: int
     namn: str
     roll: str  # sjukskoterska, underskoterska, etc.
     anstallning: int  # 75, 100, etc. (procent)
@@ -67,7 +68,11 @@ class Person:
             Franvaro.from_dict(f) for f in data.get('franvaro', [])
         ]
 
+        # Auto-generera ID om det saknas (backward compat)
+        person_id = data.get('id', abs(hash(data['namn'])) % 100000)
+
         return cls(
+            id=person_id,
             namn=data['namn'],
             roll=data['roll'],
             anstallning=data['anstallning'],

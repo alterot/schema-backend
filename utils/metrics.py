@@ -46,20 +46,20 @@ def calculate_overtime_hours(schema_rader: List, personal: List) -> float:
     Returns:
         Total övertid i timmar
     """
-    # Summera faktiska timmar per person
+    # Summera faktiska timmar per person (keyed by person ID)
     timmar_per_person = defaultdict(float)
     for rad in schema_rader:
         duration = getattr(rad, 'duration_hours', 8)
-        for person_namn in rad.personal:
-            timmar_per_person[person_namn] += duration
+        for person_id in rad.personal:
+            timmar_per_person[person_id] += duration
 
     # Skapa lookup för max timmar per person
-    max_timmar_lookup = {p.namn: p.max_timmar_per_manad for p in personal}
+    max_timmar_lookup = {p.id: p.max_timmar_per_manad for p in personal}
 
     # Beräkna övertid
     total_overtime_hours = 0.0
-    for person_namn, timmar in timmar_per_person.items():
-        max_timmar = max_timmar_lookup.get(person_namn, timmar)
+    for person_id, timmar in timmar_per_person.items():
+        max_timmar = max_timmar_lookup.get(person_id, timmar)
         total_overtime_hours += max(0, timmar - max_timmar)
 
     return round(total_overtime_hours, 1)
@@ -94,22 +94,22 @@ def calculate_cost_kr(schema_rader: List, personal: List) -> float:
     Returns:
         Total kostnad i kronor
     """
-    # Skapa lookup för person -> roll och max timmar
-    person_roll_lookup = {p.namn: p.roll for p in personal}
-    max_timmar_lookup = {p.namn: p.max_timmar_per_manad for p in personal}
+    # Skapa lookup för person -> roll och max timmar (keyed by person ID)
+    person_roll_lookup = {p.id: p.roll for p in personal}
+    max_timmar_lookup = {p.id: p.max_timmar_per_manad for p in personal}
 
-    # Summera faktiska timmar per person
+    # Summera faktiska timmar per person (keyed by person ID)
     timmar_per_person = defaultdict(float)
     for rad in schema_rader:
         duration = getattr(rad, 'duration_hours', 8)
-        for person_namn in rad.personal:
-            timmar_per_person[person_namn] += duration
+        for person_id in rad.personal:
+            timmar_per_person[person_id] += duration
 
     total_cost = 0.0
 
-    for person_namn, total_timmar in timmar_per_person.items():
-        roll = person_roll_lookup.get(person_namn, "underskoterska")
-        max_timmar = max_timmar_lookup.get(person_namn, total_timmar)
+    for person_id, total_timmar in timmar_per_person.items():
+        roll = person_roll_lookup.get(person_id, "underskoterska")
+        max_timmar = max_timmar_lookup.get(person_id, total_timmar)
 
         # Bestäm timpris baserat på roll
         if "sjuksköterska" in roll.lower() or "ssk" in roll.lower():
