@@ -4,6 +4,18 @@ from models import Person, Shift, Schedule, SchemaRad, Konflikt, PassTyp
 from .constraints import ConstraintBuilder
 from collections import defaultdict
 
+# Visningsnamn för roller (internt utan å/ä/ö, externt med)
+ROLL_DISPLAY = {
+    'lakare': 'läkare',
+    'sjukskoterska': 'sjuksköterska',
+    'underskoterska': 'undersköterska',
+}
+
+
+def _roll(roll: str) -> str:
+    """Konverterar internt rollnamn till visningsnamn med å/ä/ö."""
+    return ROLL_DISPLAY.get(roll, roll)
+
 
 class SchemaOptimizer:
     """
@@ -307,7 +319,7 @@ class SchemaOptimizer:
                             datum=rad.datum,
                             pass_typ=rad.pass_typ,
                             typ='undermanning',
-                            beskrivning=f'Saknar {krav - faktisk} {roll}',
+                            beskrivning=f'Saknar {krav - faktisk} {_roll(roll)}',
                             allvarlighetsgrad=3
                         ))
                     elif faktisk > krav:
@@ -315,7 +327,7 @@ class SchemaOptimizer:
                             datum=rad.datum,
                             pass_typ=rad.pass_typ,
                             typ='overbemanning',
-                            beskrivning=f'{faktisk - krav} extra {roll} — överväg flex/ledig',
+                            beskrivning=f'{faktisk - krav} extra {_roll(roll)} — överväg flex/ledig',
                             allvarlighetsgrad=0
                         ))
 
@@ -358,7 +370,7 @@ class SchemaOptimizer:
                     datum=None,
                     pass_typ=None,
                     typ=f'obalanserad_{label}fordelning',
-                    beskrivning=f'Ojämn {label}fördelning bland {roll}: {max_p} {max_v} {label}pass, {min_p} {min_v}. {forklaring}',
+                    beskrivning=f'Ojämn {label}fördelning bland {_roll(roll)}: {max_p} {max_v} {label}pass, {min_p} {min_v}. {forklaring}',
                     allvarlighetsgrad=1
                 ))
 
@@ -427,7 +439,7 @@ class SchemaOptimizer:
                         datum=shift.datum,
                         pass_typ=shift.pass_typ,
                         typ='otillracklig_kompetens',
-                        beskrivning=f'För få {roll}: Behöver {antal_krav} men '
+                        beskrivning=f'För få {_roll(roll)}: Behöver {antal_krav} men '
                                    f'endast {len(tillgangliga)} är tillgängliga',
                         allvarlighetsgrad=3
                     ))
@@ -468,7 +480,7 @@ class SchemaOptimizer:
                             pass_typ=None,
                             typ='franvaro_konflikt',
                             beskrivning=f'Frånvaro påverkar bemanningen: '
-                                       f'{len(franvarande)} {roll} frånvarande, '
+                                       f'{len(franvarande)} {_roll(roll)} frånvarande, '
                                        f'behöver {behov} men har endast {len(tillgangliga)}',
                             allvarlighetsgrad=3
                         ))
