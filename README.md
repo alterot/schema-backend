@@ -195,6 +195,71 @@ Allvarlighetsgrad: 1 = varning, 2 = allvarlig, 3 = kritisk
 
 Uppdatera `utils/validators.py` med nya valideringsregler.
 
+## Audit Log (Supabase)
+
+Varje schemagenerering loggas till tabellen `audit_log` i Supabase. Kräver att `SUPABASE_URL` och `SUPABASE_KEY` är satta i `.env`. Om de saknas körs appen utan audit-loggning.
+
+### Kolumner
+
+| Kolumn | Typ | Beskrivning |
+|--------|-----|-------------|
+| `period` | text | Vilken månad schemat gäller, t.ex. `"2026-03"` |
+| `user_input` | text | Användarens fritext till AI-chatten, t.ex. *"Lisa är sjuk 10-14 mars"* |
+| `ai_reasoning` | text | AI-agentens resonemang och analys av instruktionen |
+| `personal_overrides` | jsonb | De ändringar AI-agenten skickade till solvern. Tom `[]` vid ren generering utan modifieringar. Exempel: `[{"namn": "Lisa", "add_franvaro": {"start": "2026-03-10", "slut": "2026-03-14"}}]` |
+| `schedule_data` | jsonb | Hela schemat: en array med `{datum, pass, avdelning, personal: [person-ID:n]}`. Koppla med `personal_lookup` nedan för att se namn. |
+| `personal_lookup` | jsonb | Mappning från person-ID till namn och roll: `{"1": {"namn": "Anna Lindqvist", "roll": "sjukskoterska"}, ...}`. Nyckel for att tyda ID:n i `schedule_data`. |
+| `metrics` | jsonb | `{coverage_percent, overtime_hours, rule_violations, cost_kr, quality_score}` |
+| `konflikter` | jsonb | Lista med konflikter: `{datum, pass_typ, typ, beskrivning, allvarlighetsgrad}` |
+| `solver_status` | text | `"OPTIMAL"` (lösning hittad) eller `"INFEASIBLE"` (inga lösningar) |
+| `antal_personal` | int | Antal personer i beräkningen (inkl. eventuella vikarier) |
+| `duration_ms` | int | Tid i millisekunder som solvern tog |
+| `created_at` | timestamp | Automatisk tidsstämpel (sätts av Supabase) |
+
+### Setup i Supabase
+
+Skapa tabellen via SQL Editor:
+
+```sql
+CREATE TABLE audit_log (
+  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  created_at timestamptz DEFAULT now(),
+  period text NOT NULL,
+  user_input text,
+  ai_reasoning text,
+  personal_overrides jsonb DEFAULT '[]',
+  schedule_data jsonb DEFAULT '[]',
+  personal_lookup jsonb DEFAULT '{}',
+  metrics jsonb DEFAULT '{}',
+  konflikter jsonb DEFAULT '[]',
+  solver_status text,
+  antal_personal int,
+  duration_ms int
+);
+```
+
+### Exempelquery: visa schema med namn
+
+```sql
+SELECT
+  period,
+  created_at,
+  solver_status,
+  metrics->>'coverage_percent' AS coverage,
+  metrics->>'quality_score' AS quality,
+  duration_ms,
+  personal_lookup
+FROM audit_log
+ORDER BY created_at DESC
+LIMIT 10;
+```
+
+### Noteringar
+
+- `personal_overrides` fylls bara när AI-agenten aktivt modifierar personal (t.ex. lägger till frånvaro, vikarier, eller ändrar tillgänglighet). Vid en ren schemagenerering utan modifieringar är den tom `[]` -- det är korrekt beteende.
+- `schedule_data` innehåller person-ID:n (heltal) i `personal`-fältet, inte namn. Använd `personal_lookup` för att slå upp vem varje ID är.
+- Om `SUPABASE_URL`/`SUPABASE_KEY` inte är konfigurerade loggas en varning vid uppstart, men appen fungerar normalt utan audit-loggning.
+
 ## Testning
 
 Se `test_example.json` för ett komplett exempel på input-data.
